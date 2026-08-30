@@ -32,7 +32,35 @@ namespace ZKAttendance.Web.Controllers
         // GET: Reports/Index
         public IActionResult Index()
         {
-            return View();
+            return RedirectToAction(nameof(Daily));
+        }
+
+        // ═════════════════════════════════════════════════════════════
+        // Daily - primary daily attendance report
+        // ═════════════════════════════════════════════════════════════
+
+        // GET: Reports/Daily
+        public async Task<IActionResult> Daily(DateTime? date, int? branchId, string? department)
+        {
+            try
+            {
+                var selectedDate = date ?? DateTime.Today;
+                var report = await _reportService.GetDailyAttendanceReportAsync(selectedDate, branchId, department);
+
+                ViewBag.SelectedDate = selectedDate;
+                ViewBag.SelectedBranchId = branchId;
+                ViewBag.SelectedDepartment = department;
+                ViewBag.Branches = await _lookupService.GetActiveBranchesAsync();
+                ViewBag.Departments = await _lookupService.GetActiveDepartmentsAsync();
+
+                return View(report);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error generating daily report for date {Date}", date);
+                TempData["ErrorMessage"] = "An error occurred while generating the daily report.";
+                return View(new DailyAttendanceReportDto { Date = date ?? DateTime.Today });
+            }
         }
 
         // ═════════════════════════════════════════════════════════════
