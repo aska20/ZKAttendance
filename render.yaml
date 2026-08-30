@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: zkattendance-web
+    runtime: dotnet
+    # Publish the Web project explicitly. With four projects at the root,
+    # a bare `dotnet publish` cannot tell which one is the entry point.
+    buildCommand: dotnet publish ZKAttendance.Web/ZKAttendance.Web.csproj -c Release -o out
+    startCommand: dotnet out/ZKAttendance.Web.dll
+    envVars:
+      - key: ASPNETCORE_URLS
+        value: http://0.0.0.0:10000
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production

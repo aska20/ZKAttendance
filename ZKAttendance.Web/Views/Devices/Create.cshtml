@@ -1,0 +1,210 @@
+﻿@model ZKAttendance.Domain.Entities.Device
+
+@{
+    ViewData["Title"] = "Add New Device";
+}
+
+<style>
+    .page-header {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+    }
+
+    .form-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        padding: 2rem;
+    }
+
+    .form-section {
+        border-bottom: 2px solid #f0f0f0;
+        padding-bottom: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+        .form-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+
+    .section-title {
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: #495057;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+    }
+
+        .section-title i {
+            margin-left: 0.5rem;
+            color: #00f2fe;
+        }
+
+    .form-label {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 0.5rem;
+    }
+
+    .form-control, .form-select {
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+        padding: 0.625rem 0.875rem;
+    }
+
+        .form-control:focus, .form-select:focus {
+            border-color: #00f2fe;
+            box-shadow: 0 0 0 0.2rem rgba(0, 242, 254, 0.25);
+        }
+
+    .form-check-label {
+        font-weight: 500;
+        color: #495057;
+    }
+
+    .btn-save {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        border: none;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+        color: white;
+    }
+
+        .btn-save:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(79, 172, 254, 0.4);
+            color: white;
+        }
+</style>
+
+<div class="container-fluid">
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">
+                    <i class="fas fa-mobile-alt me-2"></i>
+                    Add New Device
+                </h2>
+                <p class="mb-0 opacity-75">Add a new biometric device to the system</p>
+            </div>
+            <a asp-action="Index" class="btn btn-light">
+                <i class="fas fa-arrow-right me-2"></i>
+                Back to list
+            </a>
+        </div>
+    </div>
+
+    <!-- Form -->
+    <div class="form-card">
+        <form asp-action="Create" method="post">
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+            <!-- Basic Information -->
+            <div class="form-section">
+                <h5 class="section-title">
+                    <i class="fas fa-info-circle"></i>
+                    Basic Device Information
+                </h5>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="DeviceName" class="form-label">Device Name *</label>
+                        <input asp-for="DeviceName" class="form-control" placeholder="e.g. Ground Floor Device" />
+                        <span asp-validation-for="DeviceName" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label asp-for="BranchId" class="form-label">Branch *</label>
+                        <select asp-for="BranchId" asp-items="ViewBag.Branches" class="form-select">
+                            <option value="">-- Select Branch --</option>
+                        </select>
+                        <span asp-validation-for="BranchId" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label asp-for="DeviceModel" class="form-label">Device Model</label>
+                        <input asp-for="DeviceModel" class="form-control" placeholder="e.g. ZKTeco U260-C" />
+                        <span asp-validation-for="DeviceModel" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label asp-for="SerialNumber" class="form-label">Serial Number</label>
+                        <input asp-for="SerialNumber" class="form-control" placeholder="Serial Number" />
+                        <span asp-validation-for="SerialNumber" class="text-danger"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Connection Settings -->
+            <div class="form-section">
+                <h5 class="section-title">
+                    <i class="fas fa-network-wired"></i>
+                    Connection Settings
+                </h5>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="DeviceIP" class="form-label">IP Address *</label>
+                        <input asp-for="DeviceIP" class="form-control" placeholder="192.168.1.100" />
+                        <span asp-validation-for="DeviceIP" class="text-danger"></span>
+                        <small class="text-muted">The device's IP address on the network</small>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label asp-for="DevicePort" class="form-label">Port *</label>
+                        <input asp-for="DevicePort" class="form-control" value="4370" />
+                        <span asp-validation-for="DevicePort" class="text-danger"></span>
+                        <small class="text-muted">Default port: 4370</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Status -->
+            <div class="form-section">
+                <h5 class="section-title">
+                    <i class="fas fa-toggle-on"></i>
+                    Device Status
+                </h5>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="form-check form-switch">
+                            <input asp-for="IsActive" class="form-check-input" type="checkbox" checked />
+                            <label asp-for="IsActive" class="form-check-label">
+                                <i class="fas fa-power-off me-1"></i>
+                                Device is active
+                            </label>
+                        </div>
+                        <small class="text-muted d-block mt-1">The device must be active before data sync starts</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Buttons -->
+            <div class="d-flex justify-content-between align-items-center mt-4">
+                <a asp-action="Index" class="btn btn-secondary btn-lg">
+                    <i class="fas fa-times me-2"></i>
+                    Cancel
+                </a>
+                <button type="submit" class="btn btn-primary btn-save btn-lg">
+                    <i class="fas fa-save me-2"></i>
+                    Save Device
+                </button>
+            </div>
+        </form>
+    </div>
+
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+}

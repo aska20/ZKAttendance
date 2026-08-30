@@ -1,0 +1,448 @@
+﻿
+@model ZKAttendance.Domain.Entities.Branch
+
+@{
+    ViewData["Title"] = "Branch Details";
+    var employeeCount = Model.EmployeeBranches?.Count(eb => eb.IsActive) ?? 0;
+    var deviceCount = Model.Devices?.Count(d => d.IsActive) ?? 0;
+}
+
+<style>
+    .page-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+    }
+
+    .stats-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .stat-card {
+        background: white;
+        border: 2px solid #e9ecef;
+        border-radius: 12px;
+        padding: 1.5rem;
+        text-align: center;
+        transition: all 0.3s ease;
+    }
+
+        .stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border-color: #667eea;
+        }
+
+    .stat-icon {
+        font-size: 2.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .stat-number {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #212529;
+    }
+
+    .stat-label {
+        color: #6c757d;
+        font-size: 0.9rem;
+    }
+
+    .details-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+        margin-bottom: 2rem;
+    }
+
+    .card-header-custom {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 1.5rem;
+        border-bottom: 2px solid #dee2e6;
+    }
+
+    .section-title {
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: #495057;
+        margin-bottom: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .info-row {
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid #f0f0f0;
+        display: flex;
+        align-items: center;
+    }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-row:hover {
+            background: #f8f9fa;
+        }
+
+    .info-label {
+        font-weight: 600;
+        color: #6c757d;
+        width: 200px;
+        flex-shrink: 0;
+    }
+
+    .info-value {
+        color: #212529;
+        font-weight: 500;
+    }
+
+    .employee-card {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        transition: all 0.2s ease;
+    }
+
+        .employee-card:hover {
+            background: linear-gradient(135deg, #e7f3ff 0%, #f0f8ff 100%);
+            border-color: #667eea;
+            transform: translateX(-3px);
+        }
+
+    .employee-avatar {
+        width: 50px;
+        height: 50px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: 700;
+        font-size: 1.2rem;
+    }
+
+    .employee-info {
+        flex: 1;
+    }
+
+    .employee-name {
+        font-weight: 700;
+        color: #212529;
+        margin-bottom: 0.25rem;
+    }
+
+    .employee-details {
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+
+    .device-card {
+        background: white;
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 0.75rem;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        transition: all 0.2s ease;
+    }
+
+        .device-card:hover {
+            border-color: #28a745;
+            box-shadow: 0 2px 8px rgba(40, 167, 69, 0.2);
+            transform: translateX(-3px);
+        }
+
+    .device-icon {
+        width: 50px;
+        height: 50px;
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 1.5rem;
+    }
+
+    .device-info {
+        flex: 1;
+    }
+
+    .device-name {
+        font-weight: 700;
+        color: #212529;
+        margin-bottom: 0.25rem;
+    }
+
+    .device-details {
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+
+    .no-data-message {
+        text-align: center;
+        padding: 2rem;
+        color: #6c757d;
+        background: #f8f9fa;
+        border-radius: 8px;
+        font-style: italic;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        padding: 1.5rem;
+        background: #f8f9fa;
+    }
+</style>
+
+<div class="container-fluid">
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">
+                    <i class="fas fa-building me-2"></i>
+                    Branch Details
+                </h2>
+                <p class="mb-0 opacity-75">@Model.BranchName</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a asp-action="Edit" asp-route-id="@Model.BranchId" class="btn btn-warning btn-lg">
+                    <i class="fas fa-edit me-2"></i>
+                    Edit
+                </a>
+                <a asp-action="Index" class="btn btn-light btn-lg">
+                    <i class="fas fa-arrow-right me-2"></i>
+                    Back
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="stats-container">
+        <div class="stat-card">
+            <div class="stat-icon">👥</div>
+            <div class="stat-number">@employeeCount</div>
+            <div class="stat-label">employee</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">🖥️</div>
+            <div class="stat-number">@deviceCount</div>
+            <div class="stat-label">biometric device</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">
+                @if (Model.IsActive)
+                {
+                    <text>✅</text>
+                }
+                else
+                {
+                    <text>❌</text>
+                }
+            </div>
+            <div class="stat-number">@(Model.IsActive ? "Active" : "Suspended")</div>
+            <div class="stat-label">Branch Status</div>
+        </div>
+    </div>
+
+    <!-- Branch Basic Info -->
+    <div class="details-card">
+        <div class="card-header-custom">
+            <h5 class="section-title">
+                <i class="fas fa-info-circle"></i>
+                Branch Information
+            </h5>
+        </div>
+        <div>
+            <div class="info-row">
+                <div class="info-label">
+                    <i class="fas fa-barcode me-2"></i>
+                    Branch Code:
+                </div>
+                <div class="info-value">
+                    <span class="badge bg-primary">@Model.BranchCode</span>
+                </div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">
+                    <i class="fas fa-building me-2"></i>
+                    Branch Name:
+                </div>
+                <div class="info-value">@Model.BranchName</div>
+            </div>
+            @if (!string.IsNullOrEmpty(Model.City))
+            {
+                <div class="info-row">
+                    <div class="info-label">
+                        <i class="fas fa-map-marker-alt me-2"></i>
+                        City:
+                    </div>
+                    <div class="info-value">@Model.City</div>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(Model.Address))
+            {
+                <div class="info-row">
+                    <div class="info-label">
+                        <i class="fas fa-location-dot me-2"></i>
+                        Address:
+                    </div>
+                    <div class="info-value">@Model.Address</div>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(Model.ContactPerson))
+            {
+                <div class="info-row">
+                    <div class="info-label">
+                        <i class="fas fa-user-tie me-2"></i>
+                        Contact Person:
+                    </div>
+                    <div class="info-value">@Model.ContactPerson</div>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(Model.ContactPhone))
+            {
+                <div class="info-row">
+                    <div class="info-label">
+                        <i class="fas fa-phone me-2"></i>
+                        Contact Number:
+                    </div>
+                    <div class="info-value">@Model.ContactPhone</div>
+                </div>
+            }
+            <div class="info-row">
+                <div class="info-label">
+                    <i class="fas fa-calendar me-2"></i>
+                    Created:
+                </div>
+                <div class="info-value">@Model.CreatedDate.ToString("yyyy-MM-dd HH:mm")</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Employees Section -->
+    <div class="details-card">
+        <div class="card-header-custom">
+            <h5 class="section-title">
+                <i class="fas fa-users"></i>
+                Employees (@employeeCount)
+            </h5>
+        </div>
+        <div class="p-3">
+            @if (Model.EmployeeBranches?.Any(eb => eb.IsActive) == true)
+            {
+                foreach (var empBranch in Model.EmployeeBranches.Where(eb => eb.IsActive).OrderBy(eb => eb.Employee.EmployeeName))
+                {
+                    var employee = empBranch.Employee;
+                    <div class="employee-card">
+                        <div class="employee-avatar">
+                            @employee.EmployeeName?.Substring(0, 1).ToUpper()
+                        </div>
+                        <div class="employee-info">
+                            <div class="employee-name">@employee.EmployeeName</div>
+                            <div class="employee-details">
+                                <i class="fas fa-fingerprint me-1"></i>
+                                Biometric ID: @employee.BiometricUserId
+                                @if (employee.Department != null)
+                                {
+                                    <span class="ms-2">
+                                        <i class="fas fa-building me-1"></i>
+                                        @employee.Department.DepartmentName
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                        <div>
+                            <a asp-controller="Employees" asp-action="Details" asp-route-id="@employee.EmployeeId"
+                               class="btn btn-sm btn-outline-primary">
+                                <i class="fas fa-eye me-1"></i>
+                                Details
+                            </a>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="no-data-message">
+                    <i class="fas fa-user-slash fa-3x mb-3"></i>
+                    <p class="mb-0">This branch currently has no linked employees</p>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Devices Section -->
+    <div class="details-card">
+        <div class="card-header-custom">
+            <h5 class="section-title">
+                <i class="fas fa-fingerprint"></i>
+                Biometric Devices (@deviceCount)
+            </h5>
+        </div>
+        <div class="p-3">
+            @if (Model.Devices?.Any(d => d.IsActive) == true)
+            {
+                foreach (var device in Model.Devices.Where(d => d.IsActive).OrderBy(d => d.DeviceName))
+                {
+                    <div class="device-card">
+                        <div class="device-icon">
+                            <i class="fas fa-fingerprint"></i>
+                        </div>
+                        <div class="device-info">
+                            <div class="device-name">@device.DeviceName</div>
+                            <div class="device-details">
+                                <i class="fas fa-network-wired me-1"></i>
+                                @device.DeviceIP:@device.DevicePort
+                                @if (!string.IsNullOrEmpty(device.SerialNumber))
+                                {
+                                    <span class="ms-2">
+                                        <i class="fas fa-barcode me-1"></i>
+                                        S/N: @device.SerialNumber
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                        <div>
+                            <a asp-controller="Devices" asp-action="Details" asp-route-id="@device.DeviceId"
+                               class="btn btn-sm btn-outline-success">
+                                <i class="fas fa-eye me-1"></i>
+                                Details
+                            </a>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="no-data-message">
+                    <i class="fas fa-fingerprint fa-3x mb-3"></i>
+                    <p class="mb-0">This branch currently has no linked devices</p>
+                </div>
+            }
+        </div>
+    </div>
+
+</div>

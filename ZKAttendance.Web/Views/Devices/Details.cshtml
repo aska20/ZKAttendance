@@ -1,0 +1,482 @@
+﻿@model ZKAttendance.Domain.Entities.Device
+
+@{
+    ViewData["Title"] = "Device Details";
+}
+
+<style>
+    .page-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+    }
+
+    .details-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        overflow: hidden;
+    }
+
+    .card-header-custom {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 1.5rem;
+        border-bottom: 2px solid #dee2e6;
+    }
+
+    .section-title {
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: #495057;
+        margin-bottom: 0;
+        display: flex;
+        align-items: center;
+    }
+
+        .section-title i {
+            margin-left: 0.75rem;
+            color: #667eea;
+            font-size: 1.3rem;
+        }
+
+    .info-row {
+        padding: 1rem;
+        border-bottom: 1px solid #f0f0f0;
+        display: flex;
+        align-items: center;
+    }
+
+        .info-row:last-child {
+            border-bottom: none;
+        }
+
+        .info-row:hover {
+            background: #f8f9fa;
+        }
+
+    .info-label {
+        font-weight: 600;
+        color: #6c757d;
+        width: 200px;
+        flex-shrink: 0;
+    }
+
+    .info-value {
+        color: #212529;
+        font-weight: 500;
+    }
+
+    .badge-large {
+        padding: 0.5rem 1rem;
+        font-size: 1rem;
+        font-weight: 600;
+    }
+
+    .device-header {
+        text-align: center;
+        padding: 2rem;
+        background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+        border-bottom: 3px solid #667eea;
+    }
+
+    .device-icon {
+        width: 120px;
+        height: 120px;
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1rem;
+        color: white;
+        font-size: 3rem;
+        border: 5px solid white;
+        box-shadow: 0 4px 12px rgba(79, 172, 254, 0.3);
+    }
+
+    .device-name {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: #212529;
+        margin-bottom: 0.5rem;
+    }
+
+    .device-model {
+        font-size: 1.2rem;
+        color: #6c757d;
+    }
+
+    .action-buttons-details {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        margin-top: 1.5rem;
+    }
+
+    .status-online {
+        background: #d4edda;
+        color: #155724;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+
+    .status-offline {
+        background: #f8d7da;
+        color: #721c24;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+</style>
+
+<div class="container-fluid">
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">
+                    <i class="fas fa-mobile-alt me-2"></i>
+                    Device Details
+                </h2>
+                <p class="mb-0 opacity-75">View all device information</p>
+            </div>
+            <a asp-action="Index" class="btn btn-light btn-lg">
+                <i class="fas fa-arrow-right me-2"></i>
+                Back to list
+            </a>
+        </div>
+    </div>
+
+    <!-- Device Details -->
+    <div class="details-card">
+
+        <!-- Device Header with Icon -->
+        <div class="device-header">
+            <div class="device-icon">
+                <i class="fas fa-mobile-alt"></i>
+            </div>
+            <h3 class="device-name">@Model.DeviceName</h3>
+            @if (!string.IsNullOrEmpty(Model.DeviceModel))
+            {
+                <p class="device-model">
+                    <i class="fas fa-tag me-2"></i>
+                    @Model.DeviceModel
+                </p>
+            }
+            @if (Model.IsOnline)
+            {
+                <span class="status-online">
+                    <i class="fas fa-circle me-1"></i>
+                    Online
+                </span>
+            }
+            else
+            {
+                <span class="status-offline">
+                    <i class="fas fa-circle me-1"></i>
+                    Offline
+                </span>
+            }
+            @if (Model.IsActive)
+            {
+                <span class="badge-large bg-success text-white ms-2">
+                    <i class="fas fa-check-circle me-1"></i>
+                    Active
+                </span>
+            }
+            else
+            {
+                <span class="badge-large bg-danger text-white ms-2">
+                    <i class="fas fa-times-circle me-1"></i>
+                    Inactive
+                </span>
+            }
+        </div>
+
+        <!-- Basic Information -->
+        <div class="card-header-custom">
+            <h5 class="section-title">
+                <i class="fas fa-info-circle"></i>
+                Basic Information
+            </h5>
+        </div>
+        <div class="p-0">
+            <div class="info-row">
+                <div class="info-label">
+                    <i class="fas fa-mobile-alt me-2"></i>
+                    Device Name:
+                </div>
+                <div class="info-value">@Model.DeviceName</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">
+                    <i class="fas fa-building me-2"></i>
+                    Branch:
+                </div>
+                <div class="info-value">
+                    @if (Model.Branch != null)
+                    {
+                        <span class="badge bg-info text-white">@Model.Branch.BranchName</span>
+                    }
+                    else
+                    {
+                        <span class="text-muted">Not set</span>
+                    }
+                </div>
+            </div>
+            @if (!string.IsNullOrEmpty(Model.DeviceModel))
+            {
+                <div class="info-row">
+                    <div class="info-label">
+                        <i class="fas fa-tag me-2"></i>
+                        Model:
+                    </div>
+                    <div class="info-value">@Model.DeviceModel</div>
+                </div>
+            }
+            @if (!string.IsNullOrEmpty(Model.SerialNumber))
+            {
+                <div class="info-row">
+                    <div class="info-label">
+                        <i class="fas fa-barcode me-2"></i>
+                        Serial Number:
+                    </div>
+                    <div class="info-value"><code>@Model.SerialNumber</code></div>
+                </div>
+            }
+        </div>
+
+        <!-- Connection Settings -->
+        <div class="card-header-custom mt-3">
+            <h5 class="section-title">
+                <i class="fas fa-network-wired"></i>
+                Connection Settings
+            </h5>
+        </div>
+        <div class="p-0">
+            <div class="info-row">
+                <div class="info-label">
+                    <i class="fas fa-ethernet me-2"></i>
+                    IP Address:
+                </div>
+                <div class="info-value">
+                    <code class="bg-light p-2 rounded">@Model.DeviceIP</code>
+                </div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">
+                    <i class="fas fa-plug me-2"></i>
+                    Port:
+                </div>
+                <div class="info-value">
+                    <code class="bg-light p-2 rounded">@Model.DevicePort</code>
+                </div>
+            </div>
+        </div>
+
+        <!-- Connection Status -->
+        <div class="card-header-custom mt-3">
+            <h5 class="section-title">
+                <i class="fas fa-signal"></i>
+                Connection Status
+            </h5>
+        </div>
+        <div class="p-0">
+            <div class="info-row">
+                <div class="info-label">
+                    <i class="fas fa-circle me-2"></i>
+                    Device Status:
+                </div>
+                <div class="info-value">
+                    @if (Model.IsOnline)
+                    {
+                        <span class="badge bg-success">
+                            <i class="fas fa-check me-1"></i>Online
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-danger">
+                            <i class="fas fa-times me-1"></i>Offline
+                        </span>
+                    }
+                </div>
+            </div>
+            @if (!string.IsNullOrEmpty(Model.ConnectionStatus))
+            {
+                <div class="info-row">
+                    <div class="info-label">
+                        <i class="fas fa-info-circle me-2"></i>
+                        Status Message:
+                    </div>
+                    <div class="info-value">@Model.ConnectionStatus</div>
+                </div>
+            }
+            @if (Model.LastCheckTime.HasValue)
+            {
+                <div class="info-row">
+                    <div class="info-label">
+                        <i class="fas fa-clock me-2"></i>
+                        Last check:
+                    </div>
+                    <div class="info-value">@Model.LastCheckTime.Value.ToString("yyyy/MM/dd hh:mm tt")</div>
+                </div>
+            }
+            @if (Model.LastConnectionTime.HasValue)
+            {
+                <div class="info-row">
+                    <div class="info-label">
+                        <i class="fas fa-history me-2"></i>
+                        Last connection:
+                    </div>
+                    <div class="info-value">@Model.LastConnectionTime.Value.ToString("yyyy/MM/dd hh:mm tt")</div>
+                </div>
+            }
+        </div>
+
+        <!-- System Information -->
+        <div class="card-header-custom mt-3">
+            <h5 class="section-title">
+                <i class="fas fa-cog"></i>
+                System Information
+            </h5>
+        </div>
+        <div class="p-0">
+            <div class="info-row">
+                <div class="info-label">
+                    <i class="fas fa-calendar-plus me-2"></i>
+                    Added:
+                </div>
+                <div class="info-value">@Model.CreatedDate.ToString("yyyy/MM/dd hh:mm tt")</div>
+            </div>
+            @if (Model.ModifiedDate.HasValue)
+            {
+                <div class="info-row">
+                    <div class="info-label">
+                        <i class="fas fa-calendar-check me-2"></i>
+                        Last updated:
+                    </div>
+                    <div class="info-value">@Model.ModifiedDate.Value.ToString("yyyy/MM/dd hh:mm tt")</div>
+                </div>
+            }
+            <div class="info-row">
+                <div class="info-label">
+                    <i class="fas fa-power-off me-2"></i>
+                    Status:
+                </div>
+                <div class="info-value">
+                    @if (Model.IsActive)
+                    {
+                        <span class="badge bg-success"><i class="fas fa-check me-1"></i>Active</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-danger"><i class="fas fa-times me-1"></i>Inactive</span>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="p-4 bg-light">
+            <div class="action-buttons-details">
+                <button type="button" class="btn btn-info btn-lg text-white" onclick="testConnection(@Model.DeviceId)">
+                    <i class="fas fa-plug me-2"></i>
+                    Test Connection
+                </button>
+                <a asp-action="Edit" asp-route-id="@Model.DeviceId" class="btn btn-warning btn-lg text-white">
+                    <i class="fas fa-edit me-2"></i>
+                    Edit
+                </a>
+                <a asp-action="Index" class="btn btn-secondary btn-lg">
+                    <i class="fas fa-arrow-right me-2"></i>
+                    Back to list
+                </a>
+                <button type="button" class="btn btn-danger btn-lg" onclick="confirmDelete(@Model.DeviceId, '@Model.DeviceName')">
+                    <i class="fas fa-trash me-2"></i>
+                    Delete Device
+                </button>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Confirm delete
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete device: <strong id="deviceName"></strong>?</p>
+                <p class="text-danger mb-0">
+                    <i class="fas fa-info-circle me-1"></i>
+                    This action cannot be undone
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="post" style="display:inline;">
+                    @Html.AntiForgeryToken()
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash me-1"></i>
+                        Delete
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Delete confirmation
+        function confirmDelete(deviceId, deviceName) {
+            document.getElementById('deviceName').textContent = deviceName;
+            document.getElementById('deleteForm').action = '/Devices/Delete/' + deviceId;
+            new bootstrap.Modal(document.getElementById('deleteModal')).show();
+        }
+
+        // Test connection
+        function testConnection(deviceId) {
+            const btn = event.target.closest('button');
+            const originalHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Testing...';
+
+            fetch(`/Devices/TestConnection/${deviceId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+
+                if (data.success) {
+                    alert('✅ ' + data.message);
+                    location.reload();
+                } else {
+                    alert('❌ ' + data.message);
+                }
+            })
+            .catch(error => {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+                alert('Connection test failed');
+            });
+        }
+    </script>
+}

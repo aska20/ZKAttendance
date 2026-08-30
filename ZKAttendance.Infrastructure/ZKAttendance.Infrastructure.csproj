@@ -1,0 +1,65 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <!-- Every Microsoft.Extensions.* here is pinned to 9.0.10 to match what
+       EF Core 9.0.10 pulls in. Leaving them at 8.x makes NuGet report a
+       package downgrade (NU1605), which this SDK treats as an error. -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="9.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="9.0.10" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.10">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="9.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="9.0.10" />
+    <!-- Configuration.Abstractions declares IConfiguration. The GetValue<T>()
+         helper is an EXTENSION METHOD that ships separately in .Binder.
+         Without this package IConfiguration resolves but GetValue does not. -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.10" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.10" />
+    <!-- Report writers are adapters: they turn domain data into a file format. -->
+    <!-- JWT creation. The Web project references the ASP.NET side (JwtBearer);
+         this is the token-building half, used by JwtTokenService. -->
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.14.0" />
+    <PackageReference Include="ClosedXML" Version="0.105.0" />
+    <PackageReference Include="QuestPDF" Version="2025.7.3" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ZKAttendance.Application\ZKAttendance.Application.csproj" />
+    <ProjectReference Include="..\ZKAttendance.Domain\ZKAttendance.Domain.csproj" />
+  </ItemGroup>
+  <!-- The real SDK adapter lives here and nowhere else.
+       Uncomment once zkemkeeper.dll is registered with regsvr32:
+  <PropertyGroup>
+    <PlatformTarget>x86</PlatformTarget>
+  </PropertyGroup>
+  <ItemGroup>
+    <COMReference Include="zkemkeeper">
+      <Guid>{00853A19-BD51-419B-9269-2DABE57EB61F}</Guid>
+      <VersionMajor>1</VersionMajor><VersionMinor>0</VersionMinor>
+      <EmbedInteropTypes>true</EmbedInteropTypes>
+    </COMReference>
+  </ItemGroup>
+  -->
+
+  <!-- GLOBAL USINGS
+       The original project used the Web SDK, which imports these namespaces
+       automatically. This is a plain class library, so ILogger<>, IConfiguration,
+       BackgroundService and IServiceScopeFactory are not in scope by default.
+       Declaring them here beats adding four using lines to fifteen files, and
+       new files get them for free. -->
+  <ItemGroup>
+    <Using Include="Microsoft.Extensions.Logging" />
+    <Using Include="Microsoft.Extensions.Configuration" />
+    <Using Include="Microsoft.Extensions.DependencyInjection" />
+    <Using Include="Microsoft.Extensions.Hosting" />
+    <Using Include="Microsoft.Extensions.Caching.Memory" />
+  </ItemGroup>
+
+</Project>

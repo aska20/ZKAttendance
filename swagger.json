@@ -1,0 +1,442 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "ZKAttendance API",
+    "description": "Configuration, device and attendance endpoints for the biometric attendance system.",
+    "version": "v1"
+  },
+  "paths": {
+    "/api/Configuration/Branch/{branchCode}": {
+      "get": {
+        "tags": [
+          "Configuration"
+        ],
+        "summary": "Get one branch together with its devices",
+        "parameters": [
+          {
+            "name": "branchCode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/BranchConfigurationDto"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BranchConfigurationDto"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BranchConfigurationDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/Configuration/AllBranches": {
+      "get": {
+        "tags": [
+          "Configuration"
+        ],
+        "summary": "Get all branches together with their devices",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BranchConfigurationDto"
+                  }
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BranchConfigurationDto"
+                  }
+                }
+              },
+              "text/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/BranchConfigurationDto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/System/status": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Overall health: how many devices, how many are online, employee count,\r\nand today's date in both calendars.",
+        "description": "Start here. If this returns, the database connection works.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/System/devices": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Every registered device with its connection state.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/System/devices/{deviceId}/test": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Ping and port-test one device right now, without waiting for the timer.",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/System/sync": {
+      "post": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Run a sync round immediately against every active device.",
+        "description": "Normally this happens on a five-minute timer. This endpoint is for\r\ntesting: it returns exactly what the background job would have\r\nlogged, so you can see fetched / inserted / duplicate / unmapped\r\ncounts per device without watching the console.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/System/sync/{deviceId}": {
+      "post": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Run a sync round against a single device.",
+        "parameters": [
+          {
+            "name": "deviceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/System/devices/check": {
+      "post": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Force an immediate online/offline check of every device.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/System/employees": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "All active employees.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/System/employees/unregistered": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Biometric IDs that appear in attendance logs but belong to no employee.",
+        "description": "These are punches the system stored but could not attribute. They are\r\nkept rather than discarded, because losing a real punch over missing\r\npaperwork is worse than holding an unattributed row.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/System/branches": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "All branches with their devices.",
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/System/nepali-date": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Convert a Gregorian date to Bikram Sambat.",
+        "description": "Supported range is 2080-2086 BS. Outside it the converter throws,\r\ndeliberately, rather than returning a wrong date.",
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "description": "Gregorian date, yyyy-MM-dd. Defaults to today.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/System/nepali-date/month-range": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "First and last Gregorian date of a Bikram Sambat month.",
+        "description": "Used by monthly reports, which must run Baisakh 1 to the\r\n            end of Baisakh rather than the 1st to the 31st of an AD month.",
+        "parameters": [
+          {
+            "name": "bsYear",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "bsMonth",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BranchConfigurationDto": {
+        "type": "object",
+        "properties": {
+          "branch": {
+            "$ref": "#/components/schemas/BranchDto"
+          },
+          "devices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DeviceDto"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "BranchDto": {
+        "type": "object",
+        "properties": {
+          "branchId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "branchCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "branchName": {
+            "type": "string",
+            "nullable": true
+          },
+          "city": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "DeviceDto": {
+        "type": "object",
+        "properties": {
+          "deviceId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "deviceName": {
+            "type": "string",
+            "nullable": true
+          },
+          "deviceIP": {
+            "type": "string",
+            "nullable": true
+          },
+          "devicePort": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "serialNumber": {
+            "type": "string",
+            "nullable": true
+          },
+          "deviceModel": {
+            "type": "string",
+            "nullable": true
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": {
+
+        }
+      }
+    }
+  }
+}

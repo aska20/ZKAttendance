@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Logging abstractions only - no EF Core, no SQL, no zkemkeeper.
+         Application defines the ports; Infrastructure supplies the adapters. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.10" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ZKAttendance.Domain\ZKAttendance.Domain.csproj" />
+  </ItemGroup>
+</Project>

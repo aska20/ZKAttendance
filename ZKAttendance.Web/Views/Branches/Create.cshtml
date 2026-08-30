@@ -1,0 +1,404 @@
+﻿@model ZKAttendance.Domain.Entities.Branch
+
+@{
+    ViewData["Title"] = "Add New Branch";
+}
+
+<style>
+    .page-header {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+    }
+
+    .form-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        overflow: hidden;
+    }
+
+    .form-header {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        padding: 1.5rem;
+        border-bottom: 2px solid #dee2e6;
+    }
+
+    .form-section {
+        padding: 2rem;
+    }
+
+    .form-label {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 0.5rem;
+    }
+
+    .form-control {
+        border-radius: 8px;
+        border: 2px solid #e9ecef;
+        padding: 0.75rem;
+        transition: all 0.3s ease;
+    }
+
+        .form-control:focus {
+            border-color: #28a745;
+            box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.15);
+        }
+
+    .required-field::after {
+        content: " *";
+        color: #dc3545;
+    }
+
+    .form-actions {
+        background: #f8f9fa;
+        padding: 1.5rem 2rem;
+        border-top: 2px solid #dee2e6;
+        display: flex;
+        gap: 1rem;
+        justify-content: flex-end;
+    }
+
+    .btn {
+        padding: 0.75rem 2rem;
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        border: none;
+    }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+        }
+
+    .btn-secondary {
+        background: #6c757d;
+        border: none;
+    }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+    .text-danger {
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+    }
+
+    /* City dropdown styles */
+    .city-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 2px solid #28a745;
+        border-top: none;
+        border-radius: 0 0 8px 8px;
+        max-height: 250px;
+        overflow-y: auto;
+        z-index: 1000;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        display: none;
+    }
+
+        .city-dropdown.show {
+            display: block;
+        }
+
+    .city-option {
+        padding: 0.75rem 1rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+        .city-option:last-child {
+            border-bottom: none;
+        }
+
+        .city-option:hover {
+            background: #e7f3ff;
+            color: #28a745;
+            font-weight: 600;
+        }
+
+        .city-option.hidden {
+            display: none;
+        }
+
+    .position-relative {
+        position: relative;
+    }
+</style>
+
+<div class="container-fluid">
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">
+                    <i class="fas fa-plus-circle me-2"></i>
+                    Add New Branch
+                </h2>
+                <p class="mb-0 opacity-75">Add a new branch to the system</p>
+            </div>
+            <a asp-action="Index" class="btn btn-light btn-lg">
+                <i class="fas fa-arrow-right me-2"></i>
+                Back to list
+            </a>
+        </div>
+    </div>
+
+    <!-- Form Card -->
+    <div class="form-card">
+        <div class="form-header">
+            <h5 class="mb-0">
+                <i class="fas fa-building me-2"></i>
+                Branch Information
+            </h5>
+        </div>
+
+        <form asp-action="Create" method="post">
+            @Html.AntiForgeryToken()
+
+            <div class="form-section">
+
+                <!-- Row 1: Branch Code & Name -->
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label asp-for="BranchCode" class="form-label required-field">Branch Code</label>
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="fas fa-barcode"></i>
+                            </span>
+                            <input asp-for="BranchCode"
+                                   class="form-control"
+                                   placeholder="e.g. BR001"
+                                   required
+                                   maxlength="20" />
+                        </div>
+                        <span asp-validation-for="BranchCode" class="text-danger"></span>
+                        <small class="form-text text-muted">A unique code for the branch (letters and numbers)</small>
+                    </div>
+
+                    <div class="col-md-8 mb-3">
+                        <label asp-for="BranchName" class="form-label required-field">Branch Name</label>
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="fas fa-building"></i>
+                            </span>
+                            <input asp-for="BranchName"
+                                   class="form-control"
+                                   placeholder="e.g. Kathmandu Head Office"
+                                   required
+                                   maxlength="200" />
+                        </div>
+                        <span asp-validation-for="BranchName" class="text-danger"></span>
+                    </div>
+                </div>
+
+                <!-- Row 2: City & Address -->
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label asp-for="City" class="form-label">City</label>
+                        <div class="input-group position-relative">
+                            <span class="input-group-text">
+                                <i class="fas fa-map-marker-alt"></i>
+                            </span>
+                            <input asp-for="City"
+                                   id="cityInput"
+                                   class="form-control"
+                                   placeholder="Type to search..."
+                                   autocomplete="off" />
+
+                            <!-- Hidden dropdown list -->
+                            <div id="cityDropdown" class="city-dropdown">
+                                <div class="city-option" data-city="Kathmandu">Kathmandu</div>
+                                <div class="city-option" data-city="Pokhara">Pokhara</div>
+                                <div class="city-option" data-city="Lalitpur">Lalitpur</div>
+                                <div class="city-option" data-city="Bhaktapur">Bhaktapur</div>
+                                <div class="city-option" data-city="Biratnagar">Biratnagar</div>
+                                <div class="city-option" data-city="Birgunj">Birgunj</div>
+                                <div class="city-option" data-city="Butwal">Butwal</div>
+                                <div class="city-option" data-city="Dharan">Dharan</div>
+                                <div class="city-option" data-city="Bharatpur">Bharatpur</div>
+                                <div class="city-option" data-city="Janakpur">Janakpur</div>
+                                <div class="city-option" data-city="Hetauda">Hetauda</div>
+                                <div class="city-option" data-city="Nepalgunj">Nepalgunj</div>
+                                <div class="city-option" data-city="Dhangadhi">Dhangadhi</div>
+                                <div class="city-option" data-city="Itahari">Itahari</div>
+                                <div class="city-option" data-city="Damak">Damak</div>
+                                <div class="city-option" data-city="Banepa">Banepa</div>
+                                <div class="city-option" data-city="Kirtipur">Kirtipur</div>
+                                <div class="city-option" data-city="Madhyapur Thimi">Madhyapur Thimi</div>
+                                <div class="city-option" data-city="Budhanilkantha">Budhanilkantha</div>
+                                <div class="city-option" data-city="Tokha">Tokha</div>
+                                <div class="city-option" data-city="Godawari">Godawari</div>
+                                <div class="city-option" data-city="Chandragiri">Chandragiri</div>
+                                <div class="city-option" data-city="Suryabinayak">Suryabinayak</div>
+                                <div class="city-option" data-city="Kageshwori">Kageshwori</div>
+                                <div class="city-option" data-city="Tarakeshwar">Tarakeshwar</div>
+                                <div class="city-option" data-city="Nagarjun">Nagarjun</div>
+                                <div class="city-option" data-city="Changunarayan">Changunarayan</div>
+                            </div>
+                        </div>
+                        <span asp-validation-for="City" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-8 mb-3">
+                        <label asp-for="Address" class="form-label">Address</label>
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="fas fa-location-dot"></i>
+                            </span>
+                            <input asp-for="Address"
+                                   class="form-control"
+                                   placeholder="e.g. Naxal, Kathmandu"
+                                   maxlength="500" />
+                        </div>
+                        <span asp-validation-for="Address" class="text-danger"></span>
+                    </div>
+                </div>
+
+                <!-- Row 3: Contact Info -->
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label asp-for="ContactPerson" class="form-label">Contact Person</label>
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="fas fa-user-tie"></i>
+                            </span>
+                            <input asp-for="ContactPerson"
+                                   class="form-control"
+                                   placeholder="e.g. Ramesh Thapa"
+                                   maxlength="100" />
+                        </div>
+                        <span asp-validation-for="ContactPerson" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-6 mb-3">
+                        <label asp-for="ContactPhone" class="form-label">Phone Number</label>
+                        <div class="input-group">
+                            <span class="input-group-text">
+                                <i class="fas fa-phone"></i>
+                            </span>
+                            <input asp-for="ContactPhone"
+                                   class="form-control"
+                                   placeholder="e.g. 9801234567"
+                                   type="tel"
+                                   maxlength="20" />
+                        </div>
+                        <span asp-validation-for="ContactPhone" class="text-danger"></span>
+                    </div>
+                </div>
+
+                <!-- Row 4: Active Status -->
+                <div class="row">
+                    <div class="col-md-12 mb-3">
+                        <div class="form-check form-switch">
+                            <input asp-for="IsActive"
+                                   class="form-check-input"
+                                   type="checkbox"
+                                   role="switch"
+                                   checked />
+                            <label asp-for="IsActive" class="form-check-label">
+                                <strong>Branch is active</strong>
+                                <small class="text-muted d-block">When active, the branch appears in the system and can be linked to employees and devices</small>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Form Actions -->
+            <div class="form-actions">
+                <a asp-action="Index" class="btn btn-secondary">
+                    <i class="fas fa-times me-2"></i>
+                    Cancel
+                </a>
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-save me-2"></i>
+                    Save Branch
+                </button>
+            </div>
+        </form>
+    </div>
+
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        $(document).ready(function () {
+            const input = $('#cityInput');
+            const dropdown = $('#cityDropdown');
+            const options = $('.city-option');
+
+            // While typing in the field
+            input.on('input', function () {
+                const searchTerm = $(this).val().trim().toLowerCase();
+
+                if (searchTerm.length > 0) {
+                    let hasVisibleOptions = false;
+
+                    // Filter the options
+                    options.each(function () {
+                        const cityName = $(this).data('city').toLowerCase();
+
+                        if (cityName.includes(searchTerm)) {
+                            $(this).removeClass('hidden');
+                            hasVisibleOptions = true;
+                        } else {
+                            $(this).addClass('hidden');
+                        }
+                    });
+
+                    // Show the list when there are matches
+                    if (hasVisibleOptions) {
+                        dropdown.addClass('show');
+                    } else {
+                        dropdown.removeClass('show');
+                    }
+                } else {
+                    // Hide the list when the field is empty
+                    dropdown.removeClass('show');
+                    options.removeClass('hidden');
+                }
+            });
+
+            // When an option is clicked
+            options.on('click', function () {
+                const cityName = $(this).data('city');
+                input.val(cityName);
+                dropdown.removeClass('show');
+            });
+
+            // Hide the list when clicking outside
+            $(document).on('click', function (e) {
+                if (!$(e.target).closest('.input-group').length) {
+                    dropdown.removeClass('show');
+                }
+            });
+
+            // Keep the list open when clicking the input
+            input.on('click', function (e) {
+                e.stopPropagation();
+                if ($(this).val().trim().length > 0) {
+                    dropdown.addClass('show');
+                }
+            });
+        });
+    </script>
+}

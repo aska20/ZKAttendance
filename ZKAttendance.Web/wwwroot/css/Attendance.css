@@ -1,0 +1,303 @@
+﻿/* ========================================
+   Attendance Page
+   Path: wwwroot/css/Attendance.css
+======================================== */
+
+/* ========================================
+   Header and dropdown menu
+======================================== */
+.page-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 1rem;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    position: relative;
+    z-index: 10;
+}
+
+    .page-header h2 {
+        color: white;
+        margin: 0;
+        font-weight: 700;
+    }
+
+/* Export button */
+.export-btn {
+    background-color: white;
+    color: #667eea;
+    border: 2px solid white;
+    border-radius: 0.75rem;
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+    .export-btn:hover {
+        background-color: #f8fafc;
+        transform: translateY(-2px);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+    }
+
+/* Dropdown */
+.dropdown {
+    position: relative;
+    z-index: 100;
+}
+
+.dropdown-menu {
+    position: absolute;
+    top: 100%;
+    z-index: 9999;
+    margin: 0.125rem 0 0 0;
+    padding: 0.25rem 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 180px;
+    max-width: 220px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 0.5rem;
+    background-color: white;
+}
+
+.dropdown-item {
+    padding: 0.625rem 1rem;
+    transition: background-color 0.15s ease;
+    color: #333;
+    text-decoration: none;
+    display: block;
+    white-space: nowrap;
+    font-size: 0.9rem;
+}
+
+    .dropdown-item:first-child {
+        border-radius: 0.5rem 0.5rem 0 0;
+    }
+
+    .dropdown-item:last-child {
+        border-radius: 0 0 0.5rem 0.5rem;
+    }
+
+    .dropdown-item:hover {
+        background-color: #f1f5f9;
+        color: #667eea;
+    }
+
+    .dropdown-item i {
+        width: 18px;
+        display: inline-block;
+    }
+
+/* Header and menu alignment */
+html[dir="rtl"] .page-header {
+    direction: rtl;
+}
+
+    html[dir="rtl"] .page-header .d-flex {
+        flex-direction: row;
+    }
+
+html[dir="rtl"] .dropdown-menu {
+    left: 0;
+    right: auto;
+}
+
+html[dir="rtl"] .dropdown-item {
+    text-align: right;
+}
+
+    html[dir="rtl"] .dropdown-item i {
+        margin-left: 0.5rem;
+        margin-right: 0;
+    }
+
+html[dir="rtl"] .dropdown-toggle::after {
+    margin-right: 0.255em;
+    margin-left: 0;
+}
+
+/* ========================================
+   Summary cards
+======================================== */
+.stat-card {
+    z-index: 1;
+    position: relative;
+}
+
+html[dir="rtl"] .stat-card {
+    border: none;
+    border-radius: 1rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    border-right: 5px solid;
+    border-left: none;
+}
+
+    html[dir="rtl"] .stat-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    html[dir="rtl"] .stat-card.primary {
+        border-right-color: #3b82f6;
+    }
+
+    html[dir="rtl"] .stat-card.success {
+        border-right-color: #10b981;
+    }
+
+    html[dir="rtl"] .stat-card.warning {
+        border-right-color: #f59e0b;
+    }
+
+    html[dir="rtl"] .stat-card.info {
+        border-right-color: #06b6d4;
+    }
+
+/* ========================================
+   Quick filters
+======================================== */
+.filter-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 1rem;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+    .filter-section h6 {
+        color: white;
+        font-weight: 600;
+    }
+
+.quick-filter-btn {
+    border-radius: 0.5rem;
+    padding: 0.5rem 1rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    border: 2px solid white;
+    background-color: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+    .quick-filter-btn:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 12px rgba(0, 0, 0, 0.3);
+        background-color: white;
+        color: #667eea;
+    }
+
+html[dir="rtl"] .filter-section {
+    direction: rtl;
+}
+
+html[dir="rtl"] .quick-filter-btn {
+    margin-left: 0.5rem;
+    margin-right: 0;
+}
+
+/* ========================================
+   Table
+======================================== */
+.table-hover tbody tr:hover {
+    background-color: #f1f5f9;
+    cursor: pointer;
+}
+
+.table thead th {
+    background-color: #1e293b;
+    color: white;
+    font-weight: 600;
+    text-align: center;
+    vertical-align: middle;
+    padding: 1rem;
+}
+
+.table tbody td {
+    text-align: center;
+    vertical-align: middle;
+    padding: 0.75rem;
+}
+
+html[dir="rtl"] .table {
+    direction: rtl;
+    text-align: right;
+}
+
+    html[dir="rtl"] .table th,
+    html[dir="rtl"] .table td {
+        text-align: center;
+    }
+
+/* ========================================
+   Pagination
+======================================== */
+html[dir="rtl"] .pagination {
+    flex-direction: row-reverse;
+}
+
+html[dir="rtl"] .page-link {
+    margin-left: 0.25rem;
+}
+
+/* ========================================
+   Form Controls
+======================================== */
+html[dir="rtl"] .form-control,
+html[dir="rtl"] .form-select {
+    text-align: right;
+}
+
+html[dir="rtl"] .form-label {
+    text-align: right;
+    display: block;
+}
+
+/* ========================================
+   Cards
+======================================== */
+html[dir="rtl"] .card {
+    text-align: right;
+}
+
+html[dir="rtl"] .card-header {
+    text-align: right;
+}
+
+html[dir="rtl"] .card-body {
+    text-align: right;
+}
+
+/* ========================================
+   Status Badges
+======================================== */
+.status-badge {
+    padding: 0.4rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.status-present {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.status-partial {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.status-half-day {
+    background-color: #cce5ff;
+    color: #004085;
+}
+
+.status-checkout-only {
+    background-color: #ffeaa7;
+    color: #d63031;
+}
+
+.status-absent {
+    background-color: #f8d7da;
+    color: #721c24;
+}

@@ -1,0 +1,837 @@
+﻿@model ZKAttendance.Application.Dtos.EmployeeFormViewModel
+
+@{
+    ViewData["Title"] = "Add New Employee";
+    var nextBiometricId = ViewBag.NextBiometricId as string;
+    var lastBiometricIds = ViewBag.LastBiometricIds as List<string>;
+}
+
+<style>
+    .page-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 2rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+    }
+
+    .form-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        padding: 2rem;
+    }
+
+    .form-section {
+        border-bottom: 2px solid #f0f0f0;
+        padding-bottom: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+        .form-section:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+
+    .section-title {
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: #495057;
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+    }
+
+        .section-title i {
+            margin-left: 0.5rem;
+            color: #667eea;
+        }
+
+    .form-label {
+        font-weight: 600;
+        color: #495057;
+        margin-bottom: 0.5rem;
+    }
+
+    .form-control, .form-select {
+        border-radius: 8px;
+        border: 1px solid #dee2e6;
+        padding: 0.625rem 0.875rem;
+    }
+
+        .form-control:focus, .form-select:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+        }
+
+    .form-check-label {
+        font-weight: 500;
+        color: #495057;
+    }
+
+    .btn-save {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        padding: 0.75rem 2rem;
+        font-weight: 600;
+    }
+
+        .btn-save:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+    .biometric-selector {
+        background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        border: 2px solid #667eea;
+    }
+
+    .biometric-btn {
+        margin: 0.25rem;
+        min-width: 80px;
+        font-weight: 600;
+    }
+
+    .last-numbers {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .manual-input-section {
+        border-top: 2px dashed #dee2e6;
+        padding-top: 1rem;
+        margin-top: 1rem;
+    }
+
+    /* ═══════════════════════════════════════════════════════════ */
+    /* Device and branch styles */
+    /* ═══════════════════════════════════════════════════════════ */
+    .city-accordion .accordion-item {
+        border: none;
+        margin-bottom: 1rem;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    }
+
+    .city-accordion .accordion-button {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-weight: 700;
+        font-size: 1.05rem;
+        padding: 1rem 1.5rem;
+        border: none;
+    }
+
+        .city-accordion .accordion-button:not(.collapsed) {
+            background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+            color: white;
+            box-shadow: none;
+        }
+
+        .city-accordion .accordion-button:focus {
+            box-shadow: none;
+            border-color: transparent;
+        }
+
+        .city-accordion .accordion-button::after {
+            filter: brightness(0) invert(1);
+        }
+
+    .city-accordion .accordion-body {
+        padding: 1.5rem;
+        background: #f8f9fa;
+    }
+
+    .branch-card {
+        background: white;
+        border: 2px solid #dee2e6;
+        border-radius: 12px;
+        padding: 1.25rem;
+        margin-bottom: 1rem;
+        transition: all 0.3s ease;
+    }
+
+        .branch-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border-color: #667eea;
+        }
+
+        .branch-card.selected {
+            border-color: #28a745;
+            background: #f0fff4;
+        }
+
+    .branch-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 1rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 2px solid #e9ecef;
+    }
+
+    .branch-title {
+        font-weight: 700;
+        font-size: 1rem;
+        color: #495057;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .branch-actions {
+        display: flex;
+        gap: 0.5rem;
+    }
+
+    .btn-select-all-branch {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.75rem;
+        font-weight: 600;
+    }
+
+    .device-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 0.75rem;
+    }
+
+    .device-checkbox-item {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 0.75rem;
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+
+        .device-checkbox-item:hover {
+            background: #e9ecef;
+            border-color: #667eea;
+        }
+
+        .device-checkbox-item.checked {
+            background: #e7f3ff;
+            border-color: #0d6efd;
+        }
+
+    .device-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .device-name {
+        font-weight: 600;
+        color: #495057;
+        font-size: 0.9rem;
+    }
+
+    .device-details {
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+
+    .stats-badges {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+    }
+
+    .stat-badge {
+        background: white;
+        border: 2px solid #e9ecef;
+        border-radius: 8px;
+        padding: 0.75rem 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 600;
+    }
+
+        .stat-badge i {
+            font-size: 1.2rem;
+        }
+
+        .stat-badge.selected {
+            background: #d4edda;
+            border-color: #28a745;
+            color: #155724;
+        }
+
+    .search-box {
+        margin-bottom: 1.5rem;
+    }
+
+        .search-box input {
+            border-radius: 25px;
+            padding: 0.75rem 1.25rem;
+            border: 2px solid #dee2e6;
+        }
+
+            .search-box input:focus {
+                border-color: #667eea;
+                box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
+            }
+
+    .no-devices-message {
+        text-align: center;
+        padding: 2rem;
+        color: #6c757d;
+        font-style: italic;
+    }
+</style>
+
+<div class="container-fluid">
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="mb-1">
+                    <i class="fas fa-user-plus me-2"></i>
+                    Add New Employee
+                </h2>
+                <p class="mb-0 opacity-75">Add a new employee to the system</p>
+            </div>
+            <a asp-action="Index" class="btn btn-light">
+                <i class="fas fa-arrow-right me-2"></i>
+                Back to list
+            </a>
+        </div>
+    </div>
+
+    <!-- Form -->
+    <div class="form-card">
+        <form asp-action="Create" method="post">
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+            <!-- Biometric ID picker -->
+            <div class="biometric-selector">
+                <h5 class="section-title mb-3">
+                    <i class="fas fa-fingerprint"></i>
+                    Choose a Biometric ID
+                </h5>
+
+                <div class="mb-3">
+                    <small class="text-muted d-block mb-2 fw-bold">Next suggested number:</small>
+                    <button type="button" class="btn btn-lg btn-success biometric-btn"
+                            onclick="selectBiometricId('@nextBiometricId')">
+                        <i class="fas fa-magic me-1"></i>
+                        @nextBiometricId
+                    </button>
+                </div>
+
+                @if (lastBiometricIds != null && lastBiometricIds.Any())
+                {
+                    <div class="mb-3">
+                        <small class="text-muted d-block mb-2 fw-bold">Recently used numbers:</small>
+                        <div class="last-numbers">
+                            @foreach (var id in lastBiometricIds)
+                            {
+                                <button type="button" class="btn btn-outline-primary biometric-btn"
+                                        onclick="selectBiometricId('@id')">
+                                    @id
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <div class="manual-input-section">
+                    <small class="text-muted d-block mb-2 fw-bold">Or enter a number manually:</small>
+                    <div class="input-group" style="max-width: 350px;">
+                        <input type="text" id="manualBiometricInput"
+                               class="form-control"
+                               placeholder="Enter number..."
+                               pattern="[0-9]*"
+                               inputmode="numeric">
+                        <button type="button" class="btn btn-primary"
+                                onclick="applyManualBiometricId()">
+                            <i class="fas fa-check me-1"></i>
+                            Apply
+                        </button>
+                    </div>
+                </div>
+
+                <div class="mt-3">
+                    <label asp-for="BiometricUserId" class="form-label">
+                        <i class="fas fa-check-circle me-1"></i>
+                        Selected Biometric ID *
+                    </label>
+                    <input asp-for="BiometricUserId" id="selectedBiometricId"
+                           class="form-control form-control-lg"
+                           readonly
+                           style="background-color: #e9ecef; font-weight: 700; font-size: 1.3rem; text-align: center;" />
+                    <span asp-validation-for="BiometricUserId" class="text-danger"></span>
+                </div>
+            </div>
+
+            <!-- Basic Information -->
+            <div class="form-section">
+                <h5 class="section-title">
+                    <i class="fas fa-id-card"></i>
+                    Basic Information
+                </h5>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="EmployeeName" class="form-label">Employee Name *</label>
+                        <input asp-for="EmployeeName" class="form-control" placeholder="Enter the employee's full name" />
+                        <span asp-validation-for="EmployeeName" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label asp-for="Title" class="form-label">Job Title</label>
+                        <input asp-for="Title" class="form-control" placeholder="e.g. Engineer, Accountant" />
+                        <span asp-validation-for="Title" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label asp-for="Gender" class="form-label">Gender</label>
+                        <select asp-for="Gender" class="form-select">
+                            <option value="">-- Select --</option>
+                            <option value="M">Male</option>
+                            <option value="F">Female</option>
+                        </select>
+                        <span asp-validation-for="Gender" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label asp-for="HireDate" class="form-label">Hire Date</label>
+                        <input asp-for="HireDate" type="date" class="form-control" />
+                        <span asp-validation-for="HireDate" class="text-danger"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Work Information -->
+            <div class="form-section">
+                <h5 class="section-title">
+                    <i class="fas fa-briefcase"></i>
+                    Work Information
+                </h5>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label asp-for="DepartmentId" class="form-label">Department *</label>
+                        <select asp-for="DepartmentId" asp-items="ViewBag.Departments" class="form-select">
+                            <option value="">-- Select Department --</option>
+                        </select>
+                        <span asp-validation-for="DepartmentId" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label asp-for="DefaultShiftId" class="form-label">Default Shift</label>
+                        <select asp-for="DefaultShiftId" asp-items="ViewBag.Shifts" class="form-select">
+                            <option value="">-- Select Shift --</option>
+                        </select>
+                        <span asp-validation-for="DefaultShiftId" class="text-danger"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Branch and device section -->
+            <div class="form-section">
+                <h5 class="section-title">
+                    <i class="fas fa-network-wired"></i>
+                    Select biometric devices for this employee
+                </h5>
+
+                <!-- Stats Badges -->
+                <div class="stats-badges">
+                    <div class="stat-badge" id="selectedDevicesCount">
+                        <i class="fas fa-fingerprint text-primary"></i>
+                        <span>Selected: <strong>0</strong> device</span>
+                    </div>
+                    <div class="stat-badge" id="selectedBranchesCount">
+                        <i class="fas fa-building text-success"></i>
+                        <span>From: <strong>0</strong> branch</span>
+                    </div>
+                </div>
+
+                <!-- Search Box -->
+                <div class="search-box">
+                    <input type="text"
+                           id="searchDevices"
+                           class="form-control"
+                           placeholder="Search for a branch or device..." />
+                </div>
+
+                <!-- Accordion: cities -> branches -> devices -->
+                @if (Model.BranchesByCity?.Any() == true)
+                {
+                    <div class="accordion city-accordion" id="cityAccordion">
+                        @{
+                            var cityIndex = 0;
+                        }
+                        @foreach (var cityGroup in Model.BranchesByCity)
+                        {
+                            var cityName = cityGroup.Key;
+                            var branches = cityGroup.Value;
+                            var cityId = $"city{cityIndex}";
+                            var isFirstCity = cityIndex == 0;
+
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="heading-@cityId">
+                                    <button class="accordion-button @(isFirstCity ? "" : "collapsed")"
+                                            type="button"
+                                            data-bs-toggle="collapse"
+                                            data-bs-target="#collapse-@cityId"
+                                            aria-expanded="@(isFirstCity ? "true" : "false")"
+                                            aria-controls="collapse-@cityId">
+                                        <i class="fas fa-map-marker-alt me-2"></i>
+                                        @cityName
+                                        <span class="badge bg-light text-dark ms-3">@branches.Count branch</span>
+                                    </button>
+                                </h2>
+                                <div id="collapse-@cityId"
+                                     class="accordion-collapse collapse @(isFirstCity ? "show" : "")"
+                                     aria-labelledby="heading-@cityId"
+                                     data-bs-parent="#cityAccordion">
+                                    <div class="accordion-body">
+
+                                        @foreach (var branch in branches)
+                                        {
+                                            var branchHasDevices = branch.Devices?.Any() == true;
+
+                                            <div class="branch-card" data-branch-id="@branch.BranchId">
+                                                <div class="branch-header">
+                                                    <div class="branch-title">
+                                                        <i class="fas fa-building text-primary"></i>
+                                                        <span>@branch.BranchCode - @branch.BranchName</span>
+                                                        <span class="badge bg-info text-white">@(branch.Devices?.Count ?? 0) device</span>
+                                                    </div>
+                                                    <div class="branch-actions">
+                                                        @if (branchHasDevices)
+                                                        {
+                                                            <button type="button"
+                                                                    class="btn btn-sm btn-outline-primary btn-select-all-branch"
+                                                                    onclick="toggleBranchDevices(@branch.BranchId, true)">
+                                                                <i class="fas fa-check-double"></i> Select all
+                                                            </button>
+                                                            <button type="button"
+                                                                    class="btn btn-sm btn-outline-secondary btn-select-all-branch"
+                                                                    onclick="toggleBranchDevices(@branch.BranchId, false)">
+                                                                <i class="fas fa-times"></i> Clear all
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                </div>
+
+                                                @if (branchHasDevices)
+                                                {
+                                                    <div class="device-list">
+                                                        @foreach (var device in branch.Devices!)
+                                                        {
+                                                            <label class="device-checkbox-item @(device.IsSelected ? "checked" : "")"
+                                                                   data-device-id="@device.DeviceId"
+                                                                   data-branch-id="@branch.BranchId"
+                                                                   data-device-name="@device.DeviceName"
+                                                                   data-device-ip="@device.DeviceIP">
+                                                                <div class="form-check">
+                                                                    <input type="checkbox"
+                                                                           class="form-check-input device-checkbox"
+                                                                           name="SelectedDeviceIds"
+                                                                           value="@device.DeviceId"
+                                                                           id="device_@device.DeviceId"
+                                                                           @(device.IsSelected ? "checked" : "")
+                                                                           data-branch-id="@branch.BranchId" />
+                                                                    <div class="device-info">
+                                                                        <div class="device-name">@device.DeviceName</div>
+                                                                        <div class="device-details">
+                                                                            <i class="fas fa-network-wired"></i> @device.DeviceIP
+                                                                            @if (!string.IsNullOrEmpty(device.SerialNumber))
+                                                                            {
+                                                                                <span class="ms-2">
+                                                                                    <i class="fas fa-barcode"></i> @device.SerialNumber
+                                                                                </span>
+                                                                            }
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </label>
+                                                        }
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="no-devices-message">
+                                                        <i class="fas fa-inbox"></i>
+                                                        No devices linked to this branch
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+
+                                    </div>
+                                </div>
+                            </div>
+
+                            cityIndex++;
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        No branches or devices are available
+                    </div>
+                }
+
+                <div class="alert alert-info mt-3">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Note:</strong>
+                    You can pick devices from one branch or several. Attendance will only be recorded on the selected devices.
+                </div>
+            </div>
+
+            <!-- Attendance Settings -->
+            <div class="form-section">
+                <h5 class="section-title">
+                    <i class="fas fa-cog"></i>
+                    Attendance Settings
+                </h5>
+
+                <div class="row g-3">
+                    <div class="col-md-6 col-lg-4">
+                        <div class="form-check form-switch">
+                            <input asp-for="CheckAttendance" class="form-check-input" type="checkbox" checked />
+                            <label asp-for="CheckAttendance" class="form-check-label">
+                                Enable attendance tracking
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 col-lg-4">
+                        <div class="form-check form-switch">
+                            <input asp-for="CheckLate" class="form-check-input" type="checkbox" checked />
+                            <label asp-for="CheckLate" class="form-check-label">
+                                Enable late tracking
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 col-lg-4">
+                        <div class="form-check form-switch">
+                            <input asp-for="CheckEarly" class="form-check-input" type="checkbox" checked />
+                            <label asp-for="CheckEarly" class="form-check-label">
+                                Enable early-departure tracking
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 col-lg-4">
+                        <div class="form-check form-switch">
+                            <input asp-for="CheckOvertime" class="form-check-input" type="checkbox" checked />
+                            <label asp-for="CheckOvertime" class="form-check-label">
+                                Enable overtime calculation
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 col-lg-4">
+                        <div class="form-check form-switch">
+                            <input asp-for="CheckHoliday" class="form-check-input" type="checkbox" checked />
+                            <label asp-for="CheckHoliday" class="form-check-label">
+                                Enable leave tracking
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 col-lg-4">
+                        <div class="form-check form-switch">
+                            <input asp-for="IsActive" class="form-check-input" type="checkbox" checked />
+                            <label asp-for="IsActive" class="form-check-label">
+                                Employee is active
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Buttons -->
+            <div class="d-flex justify-content-between align-items-center mt-4">
+                <a asp-action="Index" class="btn btn-secondary btn-lg">
+                    <i class="fas fa-times me-2"></i>
+                    Cancel
+                </a>
+                <button type="submit" class="btn btn-primary btn-save btn-lg">
+                    <i class="fas fa-save me-2"></i>
+                    Save Employee
+                </button>
+            </div>
+        </form>
+    </div>
+
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+
+    <script>
+        // ═══════════════════════════════════════════════════════════
+        // Biometric ID picker script
+        // ═══════════════════════════════════════════════════════════
+        function selectBiometricId(id) {
+            document.getElementById('selectedBiometricId').value = id;
+            document.getElementById('manualBiometricInput').value = '';
+
+            const input = document.getElementById('selectedBiometricId');
+            input.style.backgroundColor = '#d4edda';
+            input.style.borderColor = '#28a745';
+            setTimeout(() => {
+                input.style.backgroundColor = '#e9ecef';
+                input.style.borderColor = '#dee2e6';
+            }, 800);
+        }
+
+        function applyManualBiometricId() {
+            const manualInput = document.getElementById('manualBiometricInput');
+            const value = manualInput.value.trim();
+
+            if (value === '') {
+                alert('Please enter a number');
+                manualInput.focus();
+                return;
+            }
+
+            if (!/^\d+$/.test(value)) {
+                alert('Digits only, please');
+                manualInput.focus();
+                return;
+            }
+
+            document.getElementById('selectedBiometricId').value = value;
+            manualInput.value = '';
+
+            const input = document.getElementById('selectedBiometricId');
+            input.style.backgroundColor = '#cfe2ff';
+            input.style.borderColor = '#0d6efd';
+            setTimeout(() => {
+                input.style.backgroundColor = '#e9ecef';
+                input.style.borderColor = '#dee2e6';
+            }, 800);
+        }
+
+        document.getElementById('manualBiometricInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                applyManualBiometricId();
+            }
+
+            if (!/\d/.test(e.key) && e.key !== 'Enter') {
+                e.preventDefault();
+            }
+        });
+
+        // ═══════════════════════════════════════════════════════════
+        // Device and branch picker script
+        // ═══════════════════════════════════════════════════════════
+        $(document).ready(function () {
+
+            // Refresh the counters on load
+            updateStats();
+
+            // When any checkbox changes
+            $('.device-checkbox').on('change', function () {
+                const label = $(this).closest('.device-checkbox-item');
+                if ($(this).is(':checked')) {
+                    label.addClass('checked');
+                } else {
+                    label.removeClass('checked');
+                }
+                updateStats();
+            });
+
+            // When the label itself is clicked
+            $('.device-checkbox-item').on('click', function (e) {
+                if (e.target.type !== 'checkbox') {
+                    const checkbox = $(this).find('.device-checkbox');
+                    checkbox.prop('checked', !checkbox.prop('checked')).trigger('change');
+                }
+            });
+
+            // Search
+            $('#searchDevices').on('keyup', function () {
+                const searchTerm = $(this).val().toLowerCase();
+
+                $('.branch-card').each(function () {
+                    const branchText = $(this).find('.branch-title').text().toLowerCase();
+                    let hasVisibleDevices = false;
+
+                    $(this).find('.device-checkbox-item').each(function () {
+                        const deviceName = $(this).data('device-name').toLowerCase();
+                        const deviceIp = $(this).data('device-ip').toLowerCase();
+
+                        if (deviceName.includes(searchTerm) || deviceIp.includes(searchTerm) || branchText.includes(searchTerm)) {
+                            $(this).show();
+                            hasVisibleDevices = true;
+                        } else {
+                            $(this).hide();
+                        }
+                    });
+
+                    // Show or hide the branch
+                    if (hasVisibleDevices || branchText.includes(searchTerm)) {
+                        $(this).show();
+                    } else {
+                        $(this).hide();
+                    }
+                });
+
+                // Expand every accordion item while searching
+                if (searchTerm.length > 0) {
+                    $('.accordion-collapse').addClass('show');
+                }
+            });
+
+        });
+
+        // ═══════════════════════════════════════════════════════════
+        // Select or clear all devices in a branch
+        // ═══════════════════════════════════════════════════════════
+        function toggleBranchDevices(branchId, selectAll) {
+            $(`.device-checkbox[data-branch-id="${branchId}"]`).each(function () {
+                $(this).prop('checked', selectAll).trigger('change');
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // Refresh the counters
+        // ═══════════════════════════════════════════════════════════
+        function updateStats() {
+            const selectedDevices = $('.device-checkbox:checked').length;
+            const selectedBranches = new Set();
+
+            $('.device-checkbox:checked').each(function () {
+                const branchId = $(this).data('branch-id');
+                selectedBranches.add(branchId);
+            });
+
+            $('#selectedDevicesCount strong').text(selectedDevices);
+            $('#selectedBranchesCount strong').text(selectedBranches.size);
+
+            // Refresh the badge colours
+            if (selectedDevices > 0) {
+                $('#selectedDevicesCount').addClass('selected');
+                $('#selectedBranchesCount').addClass('selected');
+            } else {
+                $('#selectedDevicesCount').removeClass('selected');
+                $('#selectedBranchesCount').removeClass('selected');
+            }
+        }
+
+    </script>
+}

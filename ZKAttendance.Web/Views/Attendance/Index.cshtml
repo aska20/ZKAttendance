@@ -1,0 +1,431 @@
+﻿@model IEnumerable<ZKAttendance.Application.Dtos.AttendanceViewModel>
+
+@{
+    ViewData["Title"] = "Attendance Records";
+    var totalRecords = ViewBag.TotalRecords ?? 0;
+    var totalCheckIns = ViewBag.TotalCheckIns ?? 0;
+    var totalCheckOuts = ViewBag.TotalCheckOuts ?? 0;
+    var totalFullAttendance = ViewBag.TotalFullAttendance ?? 0;
+    var totalPartialAttendance = ViewBag.TotalPartialAttendance ?? 0;
+    var averageWorkHours = ViewBag.AverageWorkHours ?? 0;
+    var currentPage = ViewBag.CurrentPage ?? 1;
+    var totalPages = ViewBag.TotalPages ?? 1;
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/Attendance.css" asp-append-version="true" />
+}
+
+<div class="container-fluid py-4">
+    <!-- Page heading with export button -->
+    <div class="page-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2><i class="bi bi-calendar-check-fill"></i> Attendance Management System</h2>
+
+            <div class="dropdown">
+                <button class="btn export-btn dropdown-toggle" type="button" id="exportDropdown"
+                        data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-download"></i> Export report
+                </button>
+                <ul class="dropdown-menu" aria-labelledby="exportDropdown">
+                    <li>
+                        <a class="dropdown-item" href="#" onclick="exportData('excel'); return false;">
+                            <i class="bi bi-file-earmark-excel text-success"></i> Export to Excel
+                        </a>
+                    </li>
+                    <li>
+                        <a class="dropdown-item" href="#" onclick="exportData('pdf'); return false;">
+                            <i class="bi bi-file-earmark-pdf text-danger"></i> Export to PDF
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary cards -->
+    <div class="row mb-4">
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card stat-card primary">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-2">Total Records</h6>
+                            <h2 class="mb-0 fw-bold">@totalRecords.ToString("N0")</h2>
+                        </div>
+                        <div class="text-primary" style="font-size: 3rem;">
+                            <i class="bi bi-list-check"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card stat-card success">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-2">Full Day</h6>
+                            <h2 class="mb-0 fw-bold">@totalFullAttendance.ToString("N0")</h2>
+                        </div>
+                        <div class="text-success" style="font-size: 3rem;">
+                            <i class="bi bi-check-circle-fill"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card stat-card warning">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-2">Check-in Only</h6>
+                            <h2 class="mb-0 fw-bold">@totalPartialAttendance.ToString("N0")</h2>
+                        </div>
+                        <div class="text-warning" style="font-size: 3rem;">
+                            <i class="bi bi-exclamation-triangle-fill"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-3 col-md-6 mb-3">
+            <div class="card stat-card info">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-2">Average Working Hours</h6>
+                            <h2 class="mb-0 fw-bold">@averageWorkHours.ToString("F1")</h2>
+                        </div>
+                        <div class="text-info" style="font-size: 3rem;">
+                            <i class="bi bi-clock-fill"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick filters -->
+    <div class="filter-section">
+        <h6 class="mb-3"><i class="bi bi-funnel-fill"></i> Quick Filter</h6>
+        <div class="d-flex flex-wrap gap-2 justify-content-start">
+            <button type="button" class="quick-filter-btn" onclick="applyQuickFilter('today')">
+                <i class="bi bi-calendar-day"></i> Today
+            </button>
+            <button type="button" class="quick-filter-btn" onclick="applyQuickFilter('yesterday')">
+                <i class="bi bi-calendar-minus"></i> Yesterday
+            </button>
+            <button type="button" class="quick-filter-btn" onclick="applyQuickFilter('week')">
+                <i class="bi bi-calendar-week"></i> Last 7 days
+            </button>
+            <button type="button" class="quick-filter-btn" onclick="applyQuickFilter('month')">
+                <i class="bi bi-calendar-month"></i> This month
+            </button>
+            <button type="button" class="quick-filter-btn" onclick="clearFilters()">
+                <i class="bi bi-x-circle"></i> Clear filters
+            </button>
+        </div>
+    </div>
+
+    <!-- Advanced filters -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h6 class="mb-0 fw-bold"><i class="bi bi-sliders"></i> Advanced Filters</h6>
+        </div>
+        <div class="card-body">
+            <form method="get" id="filterForm">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Biometric ID</label>
+                        <input type="text" class="form-control" name="searchString"
+                               value="@ViewBag.SearchString" placeholder="1218">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">From date</label>
+                        <input type="date" class="form-control" name="fromDate" value="@ViewBag.FromDate">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">To date</label>
+                        <input type="date" class="form-control" name="toDate" value="@ViewBag.ToDate">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Branch</label>
+                        <select class="form-select" name="branchId">
+                            <option value="">All</option>
+                            @foreach (var branch in ViewBag.Branches)
+                            {
+                                <option value="@branch.BranchId" selected="@(ViewBag.BranchId == branch.BranchId)">
+                                    @branch.BranchName
+                                </option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Device</label>
+                        <select class="form-select" name="deviceId">
+                            <option value="">All</option>
+                            @foreach (var device in ViewBag.Devices)
+                            {
+                                <option value="@device.DeviceId" selected="@(ViewBag.DeviceId == device.DeviceId)">
+                                    @device.DeviceName
+                                </option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-semibold">Attendance Status</label>
+                        <select class="form-select" name="attendanceStatus">
+                            <option value="">All</option>
+                            <option value="Full Day">Full Day</option>
+                            <option value="Half Day">Half Day</option>
+                            <option value="Check-in Only">Check-in Only</option>
+                            <option value="Check-out Only">Check-out Only</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold">Minimum</label>
+                        <input type="number" class="form-control" name="minWorkHours"
+                               value="@ViewBag.MinWorkHours" placeholder="0" min="0" max="24">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label fw-semibold">Maximum</label>
+                        <input type="number" class="form-control" name="maxWorkHours"
+                               value="@ViewBag.MaxWorkHours" placeholder="24" min="0" max="24">
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100 fw-semibold">
+                            <i class="bi bi-search"></i> Search
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="card">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th style="width: 60px;">#</th>
+                            <th>Employee</th>
+                            <th>Biometric ID</th>
+                            <th>Date (B.S.)</th>
+                            <th>Check-in</th>
+                            <th>Check-out</th>
+                            <th>Working Hours</th>
+                            <th>Branch</th>
+                            <th>In / Out Device</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (Model != null && Model.Any())
+                        {
+                            var index = ((currentPage - 1) * ViewBag.PageSize) + 1;
+                            foreach (var log in Model)
+                            {
+                                var statusClass = log.Status switch
+                                {
+                                    "Full Day" => "status-present",
+                                    "Half Day" => "status-half-day",
+                                    "Check-in Only" => "status-partial",
+                                    "Check-out Only" => "status-checkout-only",
+                                    _ => "status-absent"
+                                };
+
+                                <tr>
+                                    <td><strong>@index</strong></td>
+                                    <td>@log.EmployeeName</td>
+                                    <td><span class="badge bg-primary">@log.BiometricUserId</span></td>
+                                    <td>
+                                        @* Bikram Sambat is the primary date; the
+                                           Gregorian date is kept underneath because
+                                           the device reports in AD. *@
+                                        <strong>@log.NepaliDate</strong>
+                                        <br />
+                                        <small class="text-muted">@log.Date.ToString("yyyy-MM-dd")</small>
+                                    </td>
+                                    <td>
+                                        @if (log.CheckInTime.HasValue)
+                                        {
+                                            <span class="text-success fw-bold">
+                                                <i class="bi bi-box-arrow-in-left"></i>
+                                                @log.CheckInTime.Value.ToString("HH:mm:ss")
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (log.CheckOutTime.HasValue)
+                                        {
+                                            <span class="text-danger fw-bold">
+                                                <i class="bi bi-box-arrow-left"></i>
+                                                @log.CheckOutTime.Value.ToString("HH:mm:ss")
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (log.WorkingHours > 0)
+                                        {
+                                            <span class="badge bg-info fs-6">@log.WorkingHours.ToString("F1") h</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td>@log.BranchName</td>
+                                    <td>
+                                        @* An employee can check in on one device and
+                                           out on another. Showing only one device would
+                                           hide that they moved between branches. *@
+                                        <small>@log.CheckInDeviceName</small>
+                                        @if (log.IsCrossDevice)
+                                        {
+                                            <br />
+                                            <small class="text-warning">
+                                                <i class="fas fa-arrow-right"></i> @log.CheckOutDeviceName
+                                            </small>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span class="status-badge @statusClass">@log.Status</span>
+                                    </td>
+                                </tr>
+                                index++;
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="10" class="text-center py-5">
+                                    <div class="text-muted">
+                                        <i class="bi bi-inbox display-1 d-block mb-3"></i>
+                                        <h5>No attendance records</h5>
+                                        <p>Try changing the filters to get results</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (totalPages > 1)
+            {
+                <nav aria-label="Page navigation" class="p-3">
+                    <ul class="pagination justify-content-center mb-0">
+                        <li class="page-item @(currentPage == 1 ? "disabled" : "")">
+                            <a class="page-link" href="@GetPageUrl(currentPage - 1)">
+                                <i class="bi bi-chevron-right"></i> Previous
+                            </a>
+                        </li>
+
+                        @{
+                            var startPage = Math.Max(1, currentPage - 2);
+                            var endPage = Math.Min(totalPages, currentPage + 2);
+                        }
+
+                        @if (startPage > 1)
+                        {
+                            <li class="page-item">
+                                <a class="page-link" href="@GetPageUrl(1)">1</a>
+                            </li>
+                            if (startPage > 2)
+                            {
+                                <li class="page-item disabled"><span class="page-link">...</span></li>
+                            }
+                        }
+
+                        @for (int i = startPage; i <= endPage; i++)
+                        {
+                            <li class="page-item @(i == currentPage ? "active" : "")">
+                                <a class="page-link" href="@GetPageUrl(i)">@i</a>
+                            </li>
+                        }
+
+                        @if (endPage < totalPages)
+                        {
+                            if (endPage < totalPages - 1)
+                            {
+                                <li class="page-item disabled"><span class="page-link">...</span></li>
+                            }
+                            <li class="page-item">
+                                <a class="page-link" href="@GetPageUrl(totalPages)">@totalPages</a>
+                            </li>
+                        }
+
+                        <li class="page-item @(currentPage == totalPages ? "disabled" : "")">
+                            <a class="page-link" href="@GetPageUrl(currentPage + 1)">
+                                Next <i class="bi bi-chevron-left"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            }
+        </div>
+    </div>
+</div>
+
+@functions {
+    string GetPageUrl(int page)
+    {
+        var parameters = new Dictionary<string, string>
+        {
+            { "pageNumber", page.ToString() },
+            { "searchString", ViewBag.SearchString ?? "" },
+            { "fromDate", ViewBag.FromDate ?? "" },
+            { "toDate", ViewBag.ToDate ?? "" },
+            { "branchId", ViewBag.BranchId?.ToString() ?? "" },
+            { "deviceId", ViewBag.DeviceId?.ToString() ?? "" },
+            { "attendanceStatus", ViewBag.AttendanceStatus ?? "" },
+            { "minWorkHours", ViewBag.MinWorkHours?.ToString() ?? "" },
+            { "maxWorkHours", ViewBag.MaxWorkHours?.ToString() ?? "" }
+        };
+
+        var queryString = string.Join("&", parameters.Where(p => !string.IsNullOrEmpty(p.Value)).Select(p => $"{p.Key}={p.Value}"));
+        return "?" + queryString;
+    }
+}
+
+@section Scripts {
+    <script>
+        function exportData(format) {
+            const form = document.getElementById('filterForm');
+            const formData = new FormData(form);
+            const params = new URLSearchParams(formData);
+
+            let url = '';
+            if (format === 'excel') {
+                url = '@Url.Action("ExportExcel", "Attendance")';
+            } else if (format === 'pdf') {
+                url = '@Url.Action("ExportPdf", "Attendance")';
+            }
+
+            window.location.href = url + '?' + params.toString();
+        }
+
+        function applyQuickFilter(filter) {
+            window.location.href = '@Url.Action("Index", "Attendance")?quickFilter=' + filter;
+        }
+
+        function clearFilters() {
+            window.location.href = '@Url.Action("Index", "Attendance")';
+        }
+    </script>
+}
