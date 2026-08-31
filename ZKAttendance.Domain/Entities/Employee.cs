@@ -34,6 +34,14 @@ namespace ZKAttendance.Domain.Entities
         [StringLength(20)]
         public string? PhoneNumber { get; set; }
 
+        /// <summary>
+        /// Work email. Used to tie a login account (ApiUser) to this employee
+        /// record so the person is the same entity whether they were added from
+        /// the Employees screen or created a login from the sign-in page.
+        /// </summary>
+        [StringLength(150)]
+        public string? Email { get; set; }
+
         public DateTime? BirthDate { get; set; }
 
         public DateTime? HireDate { get; set; }

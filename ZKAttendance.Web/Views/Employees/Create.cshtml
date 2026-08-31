@@ -396,6 +396,13 @@
                     </div>
 
                     <div class="col-md-6">
+                        <label asp-for="Email" class="form-label">Work Email</label>
+                        <input asp-for="Email" type="email" class="form-control" placeholder="name@company.com" />
+                        <span asp-validation-for="Email" class="text-danger"></span>
+                        <div class="form-text">Used to connect this person's sign-in account to their record.</div>
+                    </div>
+
+                    <div class="col-md-6">
                         <label asp-for="Gender" class="form-label">Gender</label>
                         <select asp-for="Gender" class="form-select">
                             <option value="">-- Select --</option>

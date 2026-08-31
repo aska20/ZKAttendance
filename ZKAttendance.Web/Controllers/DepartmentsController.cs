@@ -6,7 +6,7 @@ using ZKAttendance.Application.Abstractions;
 
 namespace ZKAttendance.Web.Controllers
 {
-    [Authorize]
+    [Authorize(Roles = "Admin,HR")]
     public class DepartmentsController : Controller
     {
         private readonly IDepartmentService _departmentService;

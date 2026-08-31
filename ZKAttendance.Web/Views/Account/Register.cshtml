@@ -230,6 +230,13 @@
                 <p class="brand-subtitle">Register a new system user for ZKAttendance</p>
             </div>
 
+            @if (TempData["SuccessMessage"] != null)
+            {
+                <div class="validation-alert" style="background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.35); color: #86efac;">
+                    <i class="bi bi-check-circle-fill me-1"></i> @TempData["SuccessMessage"]
+                </div>
+            }
+
             @if (!ViewData.ModelState.IsValid)
             {
                 <div class="validation-alert">
@@ -264,17 +271,35 @@
                     </div>
                 </div>
 
-                <div class="mb-1">
-                    <label asp-for="Role" class="form-label">Account Role</label>
-                    <div class="input-group-custom">
-                        <i class="bi bi-shield-lock input-icon"></i>
-                        <select asp-for="Role" class="form-control-custom select-custom">
-                            <option value="Employee">Employee (Attendance & Reports)</option>
-                            <option value="HR">HR Officer (Personnel & Shift Management)</option>
-                            <option value="Admin">System Administrator (Full Control)</option>
-                        </select>
+                <div class="row">
+                    <div class="col-md-6 mb-1">
+                        <label asp-for="Role" class="form-label">Account Role</label>
+                        <div class="input-group-custom">
+                            <i class="bi bi-shield-lock input-icon"></i>
+                            <select asp-for="Role" class="form-control-custom select-custom">
+                                <option value="Employee">Employee (own attendance only)</option>
+                                <option value="HR">HR Officer (full management access)</option>
+                                <option value="Admin">System Administrator (full control)</option>
+                            </select>
+                        </div>
+                        <span asp-validation-for="Role"></span>
                     </div>
-                    <span asp-validation-for="Role"></span>
+
+                    <div class="col-md-6 mb-1">
+                        <label asp-for="BiometricUserId" class="form-label">Employee Number (optional)</label>
+                        <div class="input-group-custom">
+                            <i class="bi bi-person-badge input-icon"></i>
+                            <input asp-for="BiometricUserId" class="form-control-custom" placeholder="e.g. 1017" />
+                        </div>
+                        <span asp-validation-for="BiometricUserId"></span>
+                    </div>
+                </div>
+
+                <div class="validation-alert" style="background: rgba(59,130,246,0.12); border-color: rgba(59,130,246,0.3); color: #93c5fd;">
+                    <i class="bi bi-info-circle me-1"></i>
+                    The account is linked to an existing employee record when the
+                    employee number above — or the email — matches one. Otherwise
+                    it can be linked later from the Employees screen.
                 </div>
 
                 <div class="row">
@@ -303,8 +328,7 @@
             </form>
 
             <div class="auth-footer">
-                Already have an account?
-                <a asp-controller="Account" asp-action="Login">Sign In instead</a>
+                <a asp-controller="Dashboard" asp-action="Index">&larr; Back to dashboard</a>
             </div>
         </div>
     </div>

@@ -9,7 +9,7 @@ using ZKAttendance.Infrastructure.Services.Report;
 
 namespace ZKAttendance.Web.Controllers
 {
-    [Authorize]
+    [Authorize(Roles = "Admin,HR")]
     public class ReportsController : Controller
     {
         private readonly IReportService _reportService;

@@ -1,3 +1,5 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ZKAttendance.Application.Abstractions;
 using ZKAttendance.Application.Dtos.Api;
@@ -20,13 +22,14 @@ namespace ZKAttendance.Web.Controllers.API
             _logger = logger;
         }
 
-        /// <summary>Create an account.</summary>
+        /// <summary>Create an account. Admin only.</summary>
         /// <remarks>
-        /// Returns tokens immediately, so a new account can be used without a
-        /// second call. Role must be Admin, HR or Employee; anything else is
-        /// silently downgraded to Employee rather than trusted.
+        /// Returns tokens immediately for the new account. Role must be Admin,
+        /// HR or Employee; anything else is silently downgraded to Employee
+        /// rather than trusted. Requires a Bearer token for an Admin account.
         /// </remarks>
         [HttpPost("register")]
+        [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = "Admin")]
         [ProducesResponseType(typeof(AuthResponse), 200)]
         [ProducesResponseType(typeof(ApiError), 400)]
         public async Task<IActionResult> Register([FromBody] RegisterRequest request)

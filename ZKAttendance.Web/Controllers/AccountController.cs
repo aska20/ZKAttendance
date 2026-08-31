@@ -14,11 +14,16 @@ namespace ZKAttendance.Web.Controllers
     public class AccountController : Controller
     {
         private readonly AttendanceDbContext _context;
+        private readonly EmployeeAccountLinker _accountLinker;
         private readonly ILogger<AccountController> _logger;
 
-        public AccountController(AttendanceDbContext context, ILogger<AccountController> logger)
+        public AccountController(
+            AttendanceDbContext context,
+            EmployeeAccountLinker accountLinker,
+            ILogger<AccountController> logger)
         {
             _context = context;
+            _accountLinker = accountLinker;
             _logger = logger;
         }
 
@@ -32,7 +37,7 @@ namespace ZKAttendance.Web.Controllers
         {
             if (User.Identity?.IsAuthenticated == true)
             {
-                return RedirectToLocal(returnUrl);
+                return RedirectToLocal(returnUrl, User.FindFirstValue(ClaimTypes.Role));
             }
 
             var model = new LoginViewModel
@@ -93,27 +98,24 @@ namespace ZKAttendance.Web.Controllers
             _logger.LogInformation("User {Username} logged in successfully via Web portal.", user.Username);
             TempData["SuccessMessage"] = $"Welcome back, {user.Username}!";
 
-            return RedirectToLocal(model.ReturnUrl);
+            return RedirectToLocal(model.ReturnUrl, user.Role);
         }
 
         // ═══════════════════════════════════════════════════════
         // REGISTER
         // ═══════════════════════════════════════════════════════
 
+        // Account creation is an administrator task, not self-service. The
+        // seeded 'admin' account is the bootstrap; everyone else is created here.
         [HttpGet]
-        [AllowAnonymous]
+        [Authorize(Roles = "Admin")]
         public IActionResult Register()
         {
-            if (User.Identity?.IsAuthenticated == true)
-            {
-                return RedirectToAction("Index", "Dashboard");
-            }
-
             return View(new RegisterViewModel());
         }
 
         [HttpPost]
-        [AllowAnonymous]
+        [Authorize(Roles = "Admin")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Register(RegisterViewModel model)
         {
@@ -142,6 +144,11 @@ namespace ZKAttendance.Web.Controllers
 
             var (hash, salt) = PasswordHasher.HashPassword(model.Password);
 
+            // Tie the account to an existing employee record when we can match
+            // one by employee number or email, so the two are the same person.
+            var linkedEmployeeId = await _accountLinker.ResolveEmployeeIdAsync(
+                email, model.BiometricUserId);
+
             var newUser = new ApiUser
             {
                 Username = username,
@@ -149,6 +156,7 @@ namespace ZKAttendance.Web.Controllers
                 PasswordHash = hash,
                 PasswordSalt = salt,
                 Role = role,
+                EmployeeId = linkedEmployeeId,
                 IsActive = true,
                 CreatedDate = DateTime.Now
             };
@@ -156,24 +164,17 @@ namespace ZKAttendance.Web.Controllers
             _context.ApiUsers.Add(newUser);
             await _context.SaveChangesAsync();
 
-            _logger.LogInformation("New user {Username} registered with role {Role}", username, role);
+            _logger.LogInformation(
+                "Admin {Admin} created user {Username} with role {Role} (employee link: {EmployeeId})",
+                User.Identity?.Name, username, role, linkedEmployeeId);
 
-            // Automatically sign in the new user
-            var claims = new List<Claim>
-            {
-                new(ClaimTypes.NameIdentifier, newUser.ApiUserId.ToString()),
-                new(ClaimTypes.Name, newUser.Username),
-                new(ClaimTypes.Email, newUser.Email),
-                new(ClaimTypes.Role, newUser.Role)
-            };
+            // The admin stays signed in as themselves — the new account is for
+            // someone else. Note whether the employee link was made.
+            TempData["SuccessMessage"] = linkedEmployeeId is null
+                ? $"Account '{username}' created. No employee record matched — link it later from the Employees screen."
+                : $"Account '{username}' created and linked to an employee record.";
 
-            var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);
-            var principal = new ClaimsPrincipal(identity);
-
-            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
-
-            TempData["SuccessMessage"] = "Account registered successfully! Welcome to ZKAttendance.";
-            return RedirectToAction("Index", "Dashboard");
+            return RedirectToAction(nameof(Register));
         }
 
         // ═══════════════════════════════════════════════════════
@@ -282,6 +283,14 @@ namespace ZKAttendance.Web.Controllers
         [AllowAnonymous]
         public IActionResult AccessDenied()
         {
+            // An employee who followed a management link just gets sent to the
+            // one screen they are allowed to see, rather than a dead end.
+            if (User.Identity?.IsAuthenticated == true
+                && string.Equals(User.FindFirstValue(ClaimTypes.Role), "Employee", StringComparison.OrdinalIgnoreCase))
+            {
+                return RedirectToAction("My", "Attendance");
+            }
+
             return View();
         }
 
@@ -289,11 +298,18 @@ namespace ZKAttendance.Web.Controllers
         // HELPERS
         // ═══════════════════════════════════════════════════════
 
-        private IActionResult RedirectToLocal(string? returnUrl)
+        private IActionResult RedirectToLocal(string? returnUrl, string? role = null)
         {
             if (!string.IsNullOrEmpty(returnUrl) && Url.IsLocalUrl(returnUrl))
             {
                 return Redirect(returnUrl);
+            }
+
+            // Employee accounts have no access to the management dashboard;
+            // send them straight to their own attendance log.
+            if (string.Equals(role, "Employee", StringComparison.OrdinalIgnoreCase))
+            {
+                return RedirectToAction("My", "Attendance");
             }
 
             return RedirectToAction("Index", "Dashboard");

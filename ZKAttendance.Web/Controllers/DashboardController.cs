@@ -6,7 +6,7 @@ using ZKAttendance.Domain.Entities;
 
 namespace ZKAttendance.Web.Controllers
 {
-    [Authorize]
+    [Authorize(Roles = "Admin,HR")]
     public class DashboardController : Controller
     {
         private readonly AttendanceDbContext _context;

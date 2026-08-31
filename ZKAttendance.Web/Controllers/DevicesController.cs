@@ -7,7 +7,7 @@ using ZKAttendance.Infrastructure.Services.Common;
 
 namespace ZKAttendance.Web.Controllers
 {
-    [Authorize]
+    [Authorize(Roles = "Admin,HR")]
     public class DevicesController : Controller
     {
         private readonly IDeviceService _deviceService;

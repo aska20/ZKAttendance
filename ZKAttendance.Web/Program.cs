@@ -93,6 +93,9 @@ builder.Services.AddScoped<IEmployeeDeviceEnrollment, EmployeeDeviceEnrollment>(
 builder.Services.AddScoped<IManualAttendanceEntry, ManualAttendanceEntry>();
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
 
+// Keeps a login account (ApiUser) and its Employee record pointing at one person.
+builder.Services.AddScoped<EmployeeAccountLinker>();
+
 // ═══════════════════════════════════════════════════════
 // Background Services
 // ═══════════════════════════════════════════════════════

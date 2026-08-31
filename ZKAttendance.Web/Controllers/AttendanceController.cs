@@ -1,5 +1,7 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using QuestPDF.Infrastructure;
 using ZKAttendance.Infrastructure.Persistence;
 using ZKAttendance.Domain.Entities;
@@ -13,6 +15,10 @@ using ZKAttendance.Infrastructure.Services.Report;
 
 namespace ZKAttendance.Web.Controllers
 {
+    // Class-level: just needs a signed-in user. Individual actions tighten this
+    // — the full log is management-only, but My() is open to any account.
+    // (Controller + action [Authorize] attributes are cumulative, so a class
+    //  role filter here would also block My() for Employee accounts.)
     [Authorize]
     public class AttendanceController : Controller
     {
@@ -43,7 +49,8 @@ namespace ZKAttendance.Web.Controllers
             QuestPDF.Settings.License = LicenseType.Community;
         }
 
-        // GET: Attendance/Index
+        // GET: Attendance/Index — the full attendance log, management only
+        [Authorize(Roles = "Admin,HR")]
         public async Task<IActionResult> Index(
             string? searchString,
             DateTime? fromDate,
@@ -116,6 +123,76 @@ namespace ZKAttendance.Web.Controllers
                 branchId, deviceId, attendanceStatus, minWorkHours, maxWorkHours, quickFilter);
 
             return View(pagedLogs);
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // My — an employee's own attendance log, and nothing else
+        // ═══════════════════════════════════════════════════════
+
+        // GET: Attendance/My
+        [Authorize]
+        public async Task<IActionResult> My(DateTime? fromDate, DateTime? toDate, string? quickFilter)
+        {
+            ApplyQuickFilter(quickFilter, ref fromDate, ref toDate);
+
+            // Default to the last 30 days when no range is chosen.
+            var to = toDate ?? DateTime.Today;
+            var from = fromDate ?? to.AddDays(-30);
+
+            var employeeId = await GetCurrentEmployeeIdAsync();
+
+            ViewBag.FromDate = from.ToString("yyyy-MM-dd");
+            ViewBag.ToDate = to.ToString("yyyy-MM-dd");
+            ViewBag.QuickFilter = quickFilter;
+            ViewBag.EmployeeLinked = employeeId.HasValue;
+
+            if (employeeId is null)
+            {
+                // The signed-in account is not tied to an employee record yet.
+                return View(new List<AttendanceViewModel>());
+            }
+
+            var logs = await _context.AttendanceLogs
+                .AsNoTracking()
+                .Where(a => a.EmployeeId == employeeId.Value
+                            && a.AttendanceTime.Date >= from.Date
+                            && a.AttendanceTime.Date <= to.Date)
+                .ToListAsync();
+
+            var employees = await _queryService.GetEmployeesDictionary(new List<int> { employeeId.Value });
+            var branches = await _queryService.GetBranchesDictionary(
+                logs.Select(l => l.BranchId).Distinct().ToList());
+            var devices = await _queryService.GetDevicesDictionary(
+                logs.Select(l => l.DeviceId).Distinct().ToList());
+
+            var viewModels = await _calculationService.BuildAttendanceViewModels(
+                logs, employees, branches, devices);
+
+            ViewBag.EmployeeName = employees.TryGetValue(employeeId.Value, out var emp)
+                ? emp.EmployeeName : User.Identity?.Name;
+            ViewBag.TotalDays = viewModels.Count;
+            ViewBag.TotalHours = viewModels.Sum(v => v.WorkingHours);
+
+            return View(viewModels
+                .OrderByDescending(v => v.Date)
+                .ToList());
+        }
+
+        /// <summary>
+        /// The Employee row the signed-in account is linked to, or null when the
+        /// account stands alone (integration accounts, or an unmatched signup).
+        /// </summary>
+        private async Task<int?> GetCurrentEmployeeIdAsync()
+        {
+            var idClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!int.TryParse(idClaim, out var apiUserId))
+                return null;
+
+            return await _context.ApiUsers
+                .AsNoTracking()
+                .Where(u => u.ApiUserId == apiUserId)
+                .Select(u => u.EmployeeId)
+                .FirstOrDefaultAsync();
         }
 
         // ═══════════════════════════════════════════════════════

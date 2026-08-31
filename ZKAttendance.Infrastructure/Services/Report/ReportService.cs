@@ -104,7 +104,12 @@ namespace ZKAttendance.Infrastructure.Services.Report
             var report = new DailyAttendanceReportDto
             {
                 Date = date.Date,
-                Items = items.OrderBy(i => i.EmployeeName).ToList(),
+                // Sorted by biometric/enrol number, numerically (so 2 comes
+                // before 10), not by name.
+                Items = items
+                    .OrderBy(i => int.TryParse(i.BiometricUserId, out var n) ? n : int.MaxValue)
+                    .ThenBy(i => i.BiometricUserId)
+                    .ToList(),
                 TotalEmployees = allEmployees.Count,
                 PresentCount = items.Count(i => i.Status == "Present" || i.Status == "No check-out"),
                 AbsentCount = items.Count(i => i.Status == "Absent")
@@ -201,7 +206,12 @@ namespace ZKAttendance.Infrastructure.Services.Report
             var report = new DailyAttendanceReportDto
             {
                 Date = fromDate.Date,
-                Items = items.OrderBy(i => i.EmployeeName).ToList(),
+                // Sorted by biometric/enrol number, numerically (so 2 comes
+                // before 10), not by name.
+                Items = items
+                    .OrderBy(i => int.TryParse(i.BiometricUserId, out var n) ? n : int.MaxValue)
+                    .ThenBy(i => i.BiometricUserId)
+                    .ToList(),
                 TotalEmployees = allEmployees.Count,
                 PresentCount = items.Count(i => i.Status == "Present" || i.Status == "No check-out"),
                 AbsentCount = items.Count(i => i.Status == "Absent")

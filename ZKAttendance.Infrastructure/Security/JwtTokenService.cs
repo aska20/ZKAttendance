@@ -16,15 +16,18 @@ namespace ZKAttendance.Infrastructure.Security
         private readonly AttendanceDbContext _context;
         private readonly IConfiguration _config;
         private readonly ILogger<JwtTokenService> _logger;
+        private readonly EmployeeAccountLinker _linker;
 
         public JwtTokenService(
             AttendanceDbContext context,
             IConfiguration config,
-            ILogger<JwtTokenService> logger)
+            ILogger<JwtTokenService> logger,
+            EmployeeAccountLinker linker)
         {
             _context = context;
             _config = config;
             _logger = logger;
+            _linker = linker;
         }
 
         private string Key => _config["JwtSettings:Key"]
@@ -57,6 +60,8 @@ namespace ZKAttendance.Infrastructure.Security
                 PasswordHash = hash,
                 PasswordSalt = salt,
                 Role = role,
+                EmployeeId = await _linker.ResolveEmployeeIdAsync(
+                    request.Email, request.BiometricUserId, ct),
                 IsActive = true,
                 CreatedDate = DateTime.Now
             };
@@ -64,7 +69,9 @@ namespace ZKAttendance.Infrastructure.Security
             _context.ApiUsers.Add(user);
             await _context.SaveChangesAsync(ct);
 
-            _logger.LogInformation("API user {Username} registered with role {Role}", username, role);
+            _logger.LogInformation(
+                "API user {Username} registered with role {Role} (employee link: {EmployeeId})",
+                username, role, user.EmployeeId);
 
             return await IssueAsync(user, ct);
         }

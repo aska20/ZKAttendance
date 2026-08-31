@@ -48,6 +48,10 @@ namespace ZKAttendance.Web.Models
         [Required(ErrorMessage = "Role is required")]
         [Display(Name = "Account Role")]
         public string Role { get; set; } = "Employee";
+
+        [Display(Name = "Employee Number (optional)")]
+        [StringLength(12)]
+        public string? BiometricUserId { get; set; }
     }
 
     public class ChangePasswordViewModel

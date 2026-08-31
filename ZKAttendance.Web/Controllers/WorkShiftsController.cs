@@ -5,7 +5,7 @@ using ZKAttendance.Application.Abstractions;
 
 namespace ZKAttendance.Web.Controllers
 {
-    [Authorize]
+    [Authorize(Roles = "Admin,HR")]
     public class WorkShiftsController : Controller
     {
         private readonly IWorkShiftService _shiftService;

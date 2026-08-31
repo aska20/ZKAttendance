@@ -137,6 +137,14 @@ namespace ZKAttendance.Application.Dtos.Api
 
         /// <summary>"Admin", "HR" or "Employee". Defaults to Employee.</summary>
         public string Role { get; set; } = "Employee";
+
+        /// <summary>
+        /// Optional. The employee's biometric/enrol number. When supplied (or
+        /// when the email matches an existing employee) the new account is
+        /// linked to that Employee record instead of standing alone.
+        /// </summary>
+        [StringLength(12)]
+        public string? BiometricUserId { get; set; }
     }
 
     public class LoginRequest

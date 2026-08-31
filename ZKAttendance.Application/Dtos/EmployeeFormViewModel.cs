@@ -36,6 +36,11 @@ namespace ZKAttendance.Application.Dtos
         [StringLength(15)]
         public string? PhoneNumber { get; set; }
 
+        [Display(Name = "Work Email")]
+        [EmailAddress(ErrorMessage = "Invalid email address")]
+        [StringLength(150)]
+        public string? Email { get; set; }
+
         [Display(Name = "Date of Birth")]
         [DataType(DataType.Date)]
         public DateTime? BirthDate { get; set; }

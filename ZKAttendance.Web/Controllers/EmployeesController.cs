@@ -7,25 +7,29 @@ using ZKAttendance.Domain.Entities;
 using ZKAttendance.Application.Dtos;
 using ZKAttendance.Application.Abstractions;
 using ZKAttendance.Infrastructure.Services.Common;
+using ZKAttendance.Infrastructure.Security;
 
 namespace ZKAttendance.Web.Controllers
 {
-    [Authorize]
+    [Authorize(Roles = "Admin,HR")]
     public class EmployeesController : Controller
     {
         private readonly IEmployeeService _employeeService;
         private readonly LookupService _lookupService;
         private readonly AttendanceDbContext _context;
+        private readonly EmployeeAccountLinker _accountLinker;
         private readonly ILogger<EmployeesController> _logger;
         public EmployeesController(
     IEmployeeService employeeService,
     LookupService lookupService,
     AttendanceDbContext context,
+    EmployeeAccountLinker accountLinker,
     ILogger<EmployeesController> logger)
         {
             _employeeService = employeeService;
             _lookupService = lookupService;
             _context = context;
+            _accountLinker = accountLinker;
             _logger = logger;
         }
 
@@ -98,6 +102,7 @@ namespace ZKAttendance.Web.Controllers
                         PhoneNumber = viewModel.PhoneNumber,
                         BirthDate = viewModel.BirthDate,
                         HireDate = viewModel.HireDate,
+                        Email = viewModel.Email,
                         DepartmentId = viewModel.DepartmentId,
                         DefaultShiftId = viewModel.DefaultShiftId,
                         CheckAttendance = viewModel.CheckAttendance,
@@ -109,6 +114,10 @@ namespace ZKAttendance.Web.Controllers
                     };
 
                     await _employeeService.CreateEmployeeAsync(employee);
+
+                    // Attach any login account that was registered before this
+                    // employee record existed, so both sides are one person.
+                    await _accountLinker.BackfillAccountForEmployeeAsync(employee);
 
                     // 2. Link the employee to the selected devices
                     await SaveEmployeeDevices(employee.EmployeeId, viewModel.SelectedDeviceIds);
@@ -179,6 +188,7 @@ namespace ZKAttendance.Web.Controllers
                     PhoneNumber = employee.PhoneNumber,
                     BirthDate = employee.BirthDate,
                     HireDate = employee.HireDate,
+                    Email = employee.Email,
                     DepartmentId = employee.DepartmentId,
                     DefaultShiftId = employee.DefaultShiftId,
                     CheckAttendance = employee.CheckAttendance,
@@ -235,6 +245,7 @@ namespace ZKAttendance.Web.Controllers
                     employee.PhoneNumber = viewModel.PhoneNumber;
                     employee.BirthDate = viewModel.BirthDate;
                     employee.HireDate = viewModel.HireDate;
+                    employee.Email = viewModel.Email;
                     employee.DepartmentId = viewModel.DepartmentId;
                     employee.DefaultShiftId = viewModel.DefaultShiftId;
                     employee.CheckAttendance = viewModel.CheckAttendance;
@@ -246,6 +257,9 @@ namespace ZKAttendance.Web.Controllers
                     employee.ModifiedDate = DateTime.Now;
 
                     await _context.SaveChangesAsync();
+
+                    // Keep any matching login account attached to this record.
+                    await _accountLinker.BackfillAccountForEmployeeAsync(employee);
 
                     // Update device links
                     await SaveEmployeeDevices(employee.EmployeeId, viewModel.SelectedDeviceIds);

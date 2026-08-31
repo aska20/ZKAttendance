@@ -197,11 +197,14 @@
                                     <i class="bi bi-person-gear text-primary me-2"></i> Profile & Security
                                 </a>
                             </li>
-                            <li>
-                                <a class="dropdown-item py-2" asp-controller="Account" asp-action="Register">
-                                    <i class="bi bi-person-plus text-success me-2"></i> Register New User
-                                </a>
-                            </li>
+                            @if (User.IsInRole("Admin"))
+                            {
+                                <li>
+                                    <a class="dropdown-item py-2" asp-controller="Account" asp-action="Register">
+                                        <i class="bi bi-person-plus text-success me-2"></i> Register New User
+                                    </a>
+                                </li>
+                            }
                             <li><hr class="dropdown-divider my-1"></li>
                             <li>
                                 <form asp-controller="Account" asp-action="Logout" method="post" id="logoutForm" class="m-0">
@@ -220,9 +223,6 @@
                         <a asp-controller="Account" asp-action="Login" class="btn btn-sm btn-outline-light px-3 rounded-pill">
                             <i class="bi bi-box-arrow-in-right me-1"></i> Sign In
                         </a>
-                        <a asp-controller="Account" asp-action="Register" class="btn btn-sm btn-primary px-3 rounded-pill">
-                            <i class="bi bi-person-plus me-1"></i> Register
-                        </a>
                     </div>
                 }
             </div>
@@ -235,7 +235,22 @@
             <h5><i class="bi bi-bar-chart-line"></i> Main Menu</h5>
             <small>Administration</small>
         </div>
+        @{
+            var isManager = User.IsInRole("Admin") || User.IsInRole("HR");
+        }
         <ul class="nav flex-column">
+            @if (!isManager)
+            {
+                <li class="nav-item">
+                    <a class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "Attendance" ? "active" : "")"
+                       asp-controller="Attendance" asp-action="My">
+                        <i class="bi bi-clipboard-data" aria-hidden="true"></i>
+                        <span>My Attendance</span>
+                    </a>
+                </li>
+            }
+            @if (isManager)
+            {
             <li class="nav-item">
                 <a class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "Dashboard" ? "active" : "")"
                    asp-controller="Dashboard" asp-action="Index">
@@ -307,6 +322,7 @@
                     <span>Reports</span>
                 </a>
             </li>
+            }
             <li class="nav-item border-top mt-2 pt-2 border-secondary border-opacity-25">
                 <a class="nav-link @(ViewContext.RouteData.Values["controller"]?.ToString() == "Account" ? "active" : "")"
                    asp-controller="Account" asp-action="Profile">

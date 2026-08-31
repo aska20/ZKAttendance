@@ -7,7 +7,7 @@ using ZKAttendance.Application.Abstractions;
 
 namespace ZKAttendance.Web.Controllers
 {
-    [Authorize]
+    [Authorize(Roles = "Admin,HR")]
     public class BranchesController : Controller
     {
         private readonly IBrancheService _branchService;
