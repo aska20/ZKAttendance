@@ -50,7 +50,7 @@ you get stuck.
 
 ## Step 3: Point at your database
 
-Open `ZKAttendance.Web/appsettings.json` and change **one thing**:
+Open `ZKAttendance.Api/appsettings.json` and change **one thing**:
 
 ```
 "Server=DESKTOP-NAAT855"   →   "Server=YOUR-PC-NAME"
@@ -64,11 +64,11 @@ dialog. Full details in Part 2.
 ```
 dotnet ef migrations add MasterDeviceAndTemplates ^
   --project ZKAttendance.Infrastructure ^
-  --startup-project ZKAttendance.Web
+  --startup-project ZKAttendance.Api
 
 dotnet ef database update ^
   --project ZKAttendance.Infrastructure ^
-  --startup-project ZKAttendance.Web
+  --startup-project ZKAttendance.Api
 ```
 
 Both flags are **required**. The DbContext lives in Infrastructure but the app
@@ -82,15 +82,29 @@ Refresh SSMS — `ZKAttendanceWebDB` appears with all the tables.
 ## Step 5: Run
 
 ```bash
-dotnet run --project ZKAttendance.Web
+dotnet run --project ZKAttendance.Api
 ```
 
-Open the URL it prints, usually `https://localhost:7264`. If the browser
-blocks the certificate:
+This is now a **headless API**. The URL it prints (usually
+`https://localhost:7264` / `http://localhost:5107`) has no home page — open
+`/swagger` to explore endpoints. If the browser blocks the certificate:
 
 ```bash
 dotnet dev-certs https --trust
 ```
+
+### Step 5b: Run the web client
+
+```bash
+cd client
+npm install
+cp .env.example .env
+npm run dev
+```
+
+Open `http://localhost:5173` and sign in with the seeded `admin` account.
+The dev server proxies `/api` to `http://localhost:5107`, so keep the API
+running in the other terminal. See [`client/README.md`](client/README.md).
 
 ## Step 6: Watch it work with no hardware
 
@@ -391,7 +405,7 @@ ZKAttendance.sln
 ├── ZKAttendance.Application/     interfaces + logic — no EF, no SQL
 ├── ZKAttendance.Infrastructure/  DbContext, repositories, device clients,
 │                                 Nepali calendar, background jobs, migrations
-└── ZKAttendance.Web/             controllers, views, Program.cs, appsettings
+└── ZKAttendance.Api/             API controllers, Program.cs, appsettings
 ```
 
 Dependencies point inward only. Domain having no NuGet packages is the test:

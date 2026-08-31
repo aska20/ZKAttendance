@@ -1,13 +1,16 @@
 services:
   - type: web
-    name: zkattendance-web
+    name: zkattendance-api
     runtime: dotnet
-    # Publish the Web project explicitly. With four projects at the root,
+    # Publish the API project explicitly. With several projects at the root,
     # a bare `dotnet publish` cannot tell which one is the entry point.
-    buildCommand: dotnet publish ZKAttendance.Web/ZKAttendance.Web.csproj -c Release -o out
-    startCommand: dotnet out/ZKAttendance.Web.dll
+    buildCommand: dotnet publish ZKAttendance.Api/ZKAttendance.Api.csproj -c Release -o out
+    startCommand: dotnet out/ZKAttendance.Api.dll
     envVars:
       - key: ASPNETCORE_URLS
         value: http://0.0.0.0:10000
       - key: ASPNETCORE_ENVIRONMENT
         value: Production
+      # Origin of the deployed React app, so browser CORS pre-flight passes.
+      - key: Cors__AllowedOrigins__0
+        value: https://zkattendance-client.onrender.com

@@ -2,6 +2,81 @@ using System.ComponentModel.DataAnnotations;
 
 namespace ZKAttendance.Application.Dtos.Api
 {
+    // ── Branches ───────────────────────────────────────────────────────
+
+    public class BranchRequest
+    {
+        [Required, StringLength(20)]
+        public string BranchCode { get; set; } = string.Empty;
+
+        [Required, StringLength(100)]
+        public string BranchName { get; set; } = string.Empty;
+
+        [StringLength(50)]
+        public string? City { get; set; }
+
+        [StringLength(250)]
+        public string? Address { get; set; }
+
+        [StringLength(100)]
+        public string? ContactPerson { get; set; }
+
+        [StringLength(20)]
+        public string? ContactPhone { get; set; }
+
+        public bool IsActive { get; set; } = true;
+    }
+
+    // ── Work shifts ────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Times are "HH:mm" or "HH:mm:ss" strings — they bind to TimeSpan.
+    /// Everything except the two required times has a sensible default that
+    /// matches the WorkShift entity.
+    /// </summary>
+    public class WorkShiftRequest
+    {
+        [Required, StringLength(100)]
+        public string ShiftName { get; set; } = string.Empty;
+
+        public string? Description { get; set; }
+
+        [Required]
+        public TimeSpan StartTime { get; set; }
+
+        [Required]
+        public TimeSpan EndTime { get; set; }
+
+        public int LateMinutes { get; set; } = 15;
+        public int EarlyMinutes { get; set; } = 15;
+        public int BreakMinutes { get; set; } = 0;
+        public bool IsBreakPaid { get; set; } = true;
+        public int WorkMinutes { get; set; } = 480;
+        public bool RequireCheckIn { get; set; } = true;
+        public bool RequireCheckOut { get; set; } = true;
+        public bool IsOvernight { get; set; } = false;
+        public int OvertimeStartMinutes { get; set; } = 30;
+        public double MinHoursForFullDay { get; set; } = 4.0;
+        public double MaxRegularHours { get; set; } = 10.0;
+        public int RoundingMinutes { get; set; } = 0;
+
+        /// <summary>Comma-separated weekday numbers, e.g. "0,1,2,3,4,6" (Sun-Thu + Sat).</summary>
+        public string? WorkDays { get; set; }
+
+        public bool IsActive { get; set; } = true;
+    }
+
+    // ── Account ────────────────────────────────────────────────────────
+
+    public class ChangePasswordRequest
+    {
+        [Required]
+        public string CurrentPassword { get; set; } = string.Empty;
+
+        [Required, StringLength(100, MinimumLength = 8)]
+        public string NewPassword { get; set; } = string.Empty;
+    }
+
     // ── Departments ────────────────────────────────────────────────────
 
     public class DepartmentRequest
@@ -44,8 +119,26 @@ namespace ZKAttendance.Application.Dtos.Api
         [StringLength(50)]
         public string? Title { get; set; }
 
+        [StringLength(150), EmailAddress]
+        public string? Email { get; set; }
+
+        [StringLength(20)]
+        public string? SSN { get; set; }
+
+        [StringLength(10)]
+        public string? Gender { get; set; }
+
+        public DateTime? BirthDate { get; set; }
+
         /// <summary>Gregorian date. The BS equivalent is derived, never stored as input.</summary>
         public DateTime? HireDate { get; set; }
+
+        // Attendance tracking flags — the entity carries these; the old form set them.
+        public bool CheckAttendance { get; set; } = true;
+        public bool CheckLate { get; set; } = true;
+        public bool CheckEarly { get; set; } = true;
+        public bool CheckOvertime { get; set; } = true;
+        public bool CheckHoliday { get; set; } = true;
 
         public bool IsActive { get; set; } = true;
     }

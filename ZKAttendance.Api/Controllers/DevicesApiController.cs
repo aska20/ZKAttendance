@@ -4,7 +4,7 @@ using ZKAttendance.Application.Dtos.Api;
 using ZKAttendance.Domain.Entities;
 using ZKAttendance.Infrastructure.Services.Devices;
 
-namespace ZKAttendance.Web.Controllers.API
+namespace ZKAttendance.Api.Controllers
 {
     /// <summary>Biometric devices — registration and sync control.</summary>
     [Route("api/Devices")]
@@ -86,6 +86,41 @@ namespace ZKAttendance.Web.Controllers.API
                 });
 
                 return CreatedAtAction(nameof(Get), new { id = created.DeviceId }, Shape(created));
+            }
+            catch (InvalidOperationException ex)
+            {
+                // Duplicate IP + port, or a second master.
+                return BadRequest(ApiError.From(ex.Message));
+            }
+        }
+
+        /// <summary>Update a device.</summary>
+        [HttpPut("{id:int}")]
+        [ProducesResponseType(200)]
+        [ProducesResponseType(typeof(ApiError), 400)]
+        [ProducesResponseType(typeof(ApiError), 404)]
+        public async Task<IActionResult> Update(int id, [FromBody] DeviceRequest request)
+        {
+            var existing = await _devices.GetDeviceByIdAsync(id);
+            if (existing is null)
+                return NotFound(ApiError.From($"Device {id} not found"));
+
+            if (!Enum.TryParse<DeviceRole>(request.Role, true, out var role))
+                return BadRequest(ApiError.From($"Role must be 'Master' or 'Slave'; got '{request.Role}'"));
+
+            existing.DeviceName = request.DeviceName;
+            existing.DeviceIP = request.DeviceIP;
+            existing.DevicePort = request.DevicePort;
+            existing.SerialNumber = request.SerialNumber;
+            existing.DeviceModel = request.DeviceModel;
+            existing.BranchId = request.BranchId;
+            existing.Role = role;
+            existing.IsActive = request.IsActive;
+            existing.ModifiedDate = DateTime.Now;
+
+            try
+            {
+                return Ok(Shape(await _devices.UpdateDeviceAsync(existing)));
             }
             catch (InvalidOperationException ex)
             {
@@ -247,6 +282,8 @@ namespace ZKAttendance.Web.Controllers.API
 
         /// <summary>Present, absent and late counts for one day.</summary>
         /// <param name="date">Gregorian date. Defaults to today.</param>
+        /// <param name="branchId">Restrict the counts to one branch.</param>
+        /// <param name="departmentId">Restrict the counts to one department.</param>
         [HttpGet("daily-summary")]
         [ProducesResponseType(200)]
         public async Task<IActionResult> DailySummary(

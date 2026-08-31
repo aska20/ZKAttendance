@@ -1,27 +1,51 @@
-# ZKAttendanceWeb — Nepal Edition
+# ZKAttendance — Nepal Edition
 
-ASP.NET Core 8 MVC attendance system that collects fingerprint punches from
-**several ZKTeco devices**, merges them per employee, and presents everything
-in the **Bikram Sambat** calendar.
+Attendance system that collects fingerprint punches from **several ZKTeco
+devices**, merges them per employee, and presents everything in the **Bikram
+Sambat** calendar.
+
+The backend is a headless **ASP.NET Core 8 Web API** (`ZKAttendance.Api`).
+The frontend is a separate **React SPA** (`client/`, Vite + JavaScript +
+Tailwind). They communicate over JSON with JWT bearer auth — there are no
+server-rendered pages.
 
 ---
 
 ## Running it
 
+### Backend — `ZKAttendance.Api`
+
 ```bash
-cd ZKAttendanceWeb
 dotnet restore
 dotnet build
 ```
 
-Edit the connection string in `appsettings.json`, then:
+Edit the connection string in `ZKAttendance.Api/appsettings.json`, then:
 
 ```bash
-dotnet ef database update
+dotnet ef database update \
+  --project ZKAttendance.Infrastructure \
+  --startup-project ZKAttendance.Api
+
+cd ZKAttendance.Api
 dotnet run
 ```
 
-Open `https://localhost:7264`. The default landing page is the dashboard.
+The API listens on `http://localhost:5107` (and `https://localhost:7264`).
+Swagger UI is at `/swagger` in Development.
+
+### Frontend — `client`
+
+```bash
+cd client
+npm install
+cp .env.example .env
+npm run dev            # http://localhost:5173
+```
+
+See [`client/README.md`](client/README.md) for details. The Vite dev server
+proxies `/api` to the backend, so CORS is only a concern once the SPA is
+deployed to its own origin (configure `Cors:AllowedOrigins` in the API).
 
 ### No biometric device? It still runs.
 
@@ -36,8 +60,33 @@ three configured devices — skipping Saturdays, varying arrival times, adding
 lunch breaks, and occasionally missing a check-out. The whole pipeline runs
 end to end so you can demonstrate the system with no hardware present.
 
-Set it to `false` once `zkemkeeper.dll` is registered and you have written
-`ZkemkeeperDeviceReader` against `IZkDeviceReader`.
+### Pulling from real ZKTeco devices
+
+`ZkTcpDeviceReader` speaks the ZKTeco "standalone" protocol over **TCP port
+4370** directly — no `zkemkeeper.dll`, no COM, no x86 build. Point it at your
+devices:
+
+```json
+"SyncConfiguration": {
+  "DeviceProtocol": "Tcp",          // "Fake" (default) or "Tcp"
+  "DeviceCommPassword": 0,          // the terminal's Comm Key, if set (0 = none)
+  "DeviceTimeoutMs": 5000
+}
+```
+
+Register each device on the **Devices** screen (IP + port 4370), then hit
+**Test** and **Sync** on that row — or `POST /api/Devices/{id}/sync`. Once one
+device works the 5-minute background job picks up all active devices.
+
+> The reader follows the proven `pyzk` implementation but has **not** been
+> tested against physical hardware in this repo. It parses the common 40-byte
+> attendance-record layout; if your model returns another size the sync fails
+> with the size in the message so it can be added. The host must be on the same
+> LAN as the devices (a cloud host cannot reach `192.168.x.x`).
+
+The machine that runs the sync must therefore be on-prem. `DeviceProtocol`
+can differ per environment — keep `"Fake"` in the cloud, `"Tcp"` on the
+on-site box.
 
 ---
 
@@ -141,15 +190,27 @@ patro and re-run the self-test.
 ## Project layout
 
 ```
-Services/NepaliCalendar/     NepaliCalendarData, NepaliDate, converter,
-                             NepaliDateService, view extensions
-Services/Devices/            IZkDeviceReader, FakeDeviceReader,
-                             AttendanceSyncService, background services,
-                             existing DeviceMonitorService (ping/port only)
-Services/Attendances/        query + calculation (grouping by EmployeeId)
-Models/                      entities; EmployeeDevice carries the per-device ID
-Migrations/                  EF migrations + BackFill_PerDeviceBiometricId.sql
+ZKAttendance.Domain/          entities + enums, zero dependencies
+ZKAttendance.Application/     ports (interfaces), DTOs, pure services
+ZKAttendance.Infrastructure/  EF Core, repositories, device SDK, Nepali calendar,
+                             JWT token service, background sync + monitor
+ZKAttendance.Api/            composition root — controllers, DI, Swagger, CORS
+client/                      React SPA (Vite + JS + Tailwind)
 ```
+
+See [`ARCHITECTURE.md`](ARCHITECTURE.md) for the layer rules.
+
+### API surface
+
+`Auth` (login / refresh / revoke / register), `Account` (profile / change
+password), `Dashboard`, `Employees`, `Departments`, `Branches`, `WorkShifts`,
+`Devices`, `Attendance` (raw punches, computed log, my-attendance, manual
+entry, daily summary), `Reports` (daily / range / daily-summary), `System`
+(status / sync / device checks / Nepali-date), `Configuration` (branch +
+device config). Swagger lists them all.
+
+Not yet exposed: Excel / PDF report export (was unimplemented in the old code
+too).
 
 ---
 

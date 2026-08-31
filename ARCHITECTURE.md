@@ -5,7 +5,9 @@ ZKAttendance.sln
 ├── ZKAttendance.Domain/           ← innermost, depends on NOTHING
 ├── ZKAttendance.Application/      ← depends on Domain only
 ├── ZKAttendance.Infrastructure/   ← depends on Application + Domain
-└── ZKAttendance.Web/              ← composition root, startup project
+└── ZKAttendance.Api/             ← composition root, startup project (headless Web API)
+
+client/                           ← React SPA, separate build, talks to the API over JSON
 ```
 
 Dependencies point strictly inward. Verified by inspection:
@@ -15,7 +17,10 @@ Dependencies point strictly inward. Verified by inspection:
 | Domain | *(none)* | *(none)* |
 | Application | Domain | Logging.Abstractions only |
 | Infrastructure | Application, Domain | EF Core, SQL Server, ClosedXML, QuestPDF |
-| Web | Infrastructure, Application, Domain | ASP.NET Core, Swashbuckle |
+| Api | Infrastructure, Application, Domain | ASP.NET Core, Swashbuckle, JwtBearer |
+
+The frontend is not a .NET project. It is a Vite/React app under `client/`
+that consumes the API; nothing in the solution references it.
 
 Domain has **zero** package references. That is the test: if it needs a
 NuGet package, something belongs in an outer layer.
@@ -51,8 +56,10 @@ Everything that touches something external:
 - `Devices/` — `FakeZkDeviceClient`, and where `ZkemkeeperDeviceClient` goes.
 - `NepaliCalendar/` — the converter and the `INepaliCalendar` adapter.
 
-### Web — 35 files
-Controllers, Razor views, `wwwroot`, `Program.cs`. Nothing but delivery.
+### Api — controllers + `Program.cs`
+Attribute-routed API controllers (`[Route("api/[controller]")]`), DI wiring,
+Swagger, CORS, JWT bearer auth. No Razor, no views, no `wwwroot`. Nothing but
+delivery. The React client under `client/` is the only frontend.
 
 ---
 

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>ZKAttendance.Api</RootNamespace>
+    <!-- Emits the XML doc file so Swagger can show the <summary> text
+         written above each endpoint. NoWarn 1591 stops the compiler
+         demanding a comment on every public member. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="8.0.10" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="8.0.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.10" />
+    <!-- Design-time only, so `dotnet ef` can run from this project. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.10">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Api is the composition root. It references Infrastructure only to wire
+         up DI in Program.cs; controllers themselves depend on Application. -->
+    <ProjectReference Include="..\ZKAttendance.Infrastructure\ZKAttendance.Infrastructure.csproj" />
+    <ProjectReference Include="..\ZKAttendance.Application\ZKAttendance.Application.csproj" />
+    <ProjectReference Include="..\ZKAttendance.Domain\ZKAttendance.Domain.csproj" />
+  </ItemGroup>
+</Project>

@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using ZKAttendance.Application.Abstractions;
 using ZKAttendance.Application.Dtos.Api;
 
-namespace ZKAttendance.Web.Controllers.API
+namespace ZKAttendance.Api.Controllers
 {
     /// <summary>Registration, login and token lifecycle.</summary>
     [Route("api/Auth")]

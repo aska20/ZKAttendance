@@ -1,15 +1,18 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ZKAttendance.Api.Security;
 using ZKAttendance.Application.Abstractions;
 using ZKAttendance.Application.Dtos.Api;
 using ZKAttendance.Domain.Entities;
 
-namespace ZKAttendance.Web.Controllers.API
+namespace ZKAttendance.Api.Controllers
 {
     /// <summary>Departments — full CRUD.</summary>
     [Route("api/Departments")]
     [ApiController]
     [Produces("application/json")]
     [Tags("Departments")]
+    [Authorize(Roles = Roles.Management)]
     public class DepartmentsApiController : ControllerBase
     {
         private readonly IDepartmentService _service;
@@ -135,6 +138,7 @@ namespace ZKAttendance.Web.Controllers.API
     [ApiController]
     [Produces("application/json")]
     [Tags("Employees")]
+    [Authorize(Roles = Roles.Management)]
     public class EmployeesApiController : ControllerBase
     {
         private readonly IEmployeeService _employees;
@@ -201,7 +205,16 @@ namespace ZKAttendance.Web.Controllers.API
                 DefaultShiftId = request.DefaultShiftId,
                 PhoneNumber = request.PhoneNumber,
                 Title = request.Title,
+                Email = request.Email,
+                SSN = request.SSN,
+                Gender = request.Gender,
+                BirthDate = request.BirthDate,
                 HireDate = request.HireDate,
+                CheckAttendance = request.CheckAttendance,
+                CheckLate = request.CheckLate,
+                CheckEarly = request.CheckEarly,
+                CheckOvertime = request.CheckOvertime,
+                CheckHoliday = request.CheckHoliday,
                 IsActive = request.IsActive,
                 CreatedDate = DateTime.Now
             });
@@ -235,7 +248,16 @@ namespace ZKAttendance.Web.Controllers.API
             existing.DefaultShiftId = request.DefaultShiftId;
             existing.PhoneNumber = request.PhoneNumber;
             existing.Title = request.Title;
+            existing.Email = request.Email;
+            existing.SSN = request.SSN;
+            existing.Gender = request.Gender;
+            existing.BirthDate = request.BirthDate;
             existing.HireDate = request.HireDate;
+            existing.CheckAttendance = request.CheckAttendance;
+            existing.CheckLate = request.CheckLate;
+            existing.CheckEarly = request.CheckEarly;
+            existing.CheckOvertime = request.CheckOvertime;
+            existing.CheckHoliday = request.CheckHoliday;
             existing.IsActive = request.IsActive;
             existing.ModifiedDate = DateTime.Now;
 
@@ -312,6 +334,15 @@ namespace ZKAttendance.Web.Controllers.API
             e.DefaultShiftId,
             e.PhoneNumber,
             e.Title,
+            e.Email,
+            e.SSN,
+            e.Gender,
+            e.BirthDate,
+            e.CheckAttendance,
+            e.CheckLate,
+            e.CheckEarly,
+            e.CheckOvertime,
+            e.CheckHoliday,
             hireDate = e.HireDate,
             hireDateBs = e.HireDate.HasValue ? _nepali.ToBsString(e.HireDate.Value) : null,
             e.IsActive
