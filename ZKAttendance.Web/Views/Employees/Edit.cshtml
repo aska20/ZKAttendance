@@ -38,10 +38,10 @@
         margin-bottom: 1.5rem;
         display: flex;
         align-items: center;
+        gap: 0.5rem;
     }
 
         .section-title i {
-            margin-left: 0.5rem;
             color: #f5576c;
         }
 
@@ -377,28 +377,48 @@
                 </div>
             </div>
 
-            <!-- Work Information -->
+            <!-- Department -->
             <div class="form-section">
                 <h5 class="section-title">
-                    <i class="fas fa-briefcase"></i>
-                    Work Information
+                    <i class="fas fa-sitemap"></i>
+                    Department
                 </h5>
 
                 <div class="row g-3">
-                    <div class="col-md-6">
+                    <div class="col-md-8">
                         <label asp-for="DepartmentId" class="form-label">Department *</label>
                         <select asp-for="DepartmentId" asp-items="ViewBag.Departments" class="form-select">
                             <option value="">-- Select Department --</option>
                         </select>
                         <span asp-validation-for="DepartmentId" class="text-danger"></span>
+                        <div class="form-text">
+                            Need a new department? Manage them from
+                            <a asp-controller="Departments" asp-action="Index" target="_blank">Departments</a>
+                            in the side menu.
+                        </div>
                     </div>
+                </div>
+            </div>
 
-                    <div class="col-md-6">
+            <!-- Work Shift -->
+            <div class="form-section">
+                <h5 class="section-title">
+                    <i class="fas fa-clock"></i>
+                    Work Shift
+                </h5>
+
+                <div class="row g-3">
+                    <div class="col-md-8">
                         <label asp-for="DefaultShiftId" class="form-label">Default Shift</label>
                         <select asp-for="DefaultShiftId" asp-items="ViewBag.Shifts" class="form-select">
                             <option value="">-- Select Shift --</option>
                         </select>
                         <span asp-validation-for="DefaultShiftId" class="text-danger"></span>
+                        <div class="form-text">
+                            Need a new shift? Manage them from
+                            <a asp-controller="WorkShifts" asp-action="Index" target="_blank">Work Shifts</a>
+                            in the side menu.
+                        </div>
                     </div>
                 </div>
             </div>
