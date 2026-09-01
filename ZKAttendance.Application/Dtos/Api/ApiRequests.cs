@@ -182,6 +182,9 @@ namespace ZKAttendance.Application.Dtos.Api
         [Required]
         public int BranchId { get; set; }
 
+        /// <summary>The device Comm Key / communication password. 0 = none.</summary>
+        public int CommPassword { get; set; } = 0;
+
         /// <summary>
         /// "Master" or "Slave". Only one active master is allowed — the
         /// database enforces it with a filtered unique index, so a second one

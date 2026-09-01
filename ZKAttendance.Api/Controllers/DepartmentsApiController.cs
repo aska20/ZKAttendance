@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using ZKAttendance.Api.Security;
 using ZKAttendance.Application.Abstractions;
 using ZKAttendance.Application.Dtos.Api;
@@ -143,15 +144,18 @@ namespace ZKAttendance.Api.Controllers
     {
         private readonly IEmployeeService _employees;
         private readonly INepaliCalendar _nepali;
+        private readonly ZKAttendance.Infrastructure.Persistence.AttendanceDbContext _db;
         private readonly ILogger<EmployeesApiController> _logger;
 
         public EmployeesApiController(
             IEmployeeService employees,
             INepaliCalendar nepali,
+            ZKAttendance.Infrastructure.Persistence.AttendanceDbContext db,
             ILogger<EmployeesApiController> logger)
         {
             _employees = employees;
             _nepali = nepali;
+            _db = db;
             _logger = logger;
         }
 
@@ -284,6 +288,42 @@ namespace ZKAttendance.Api.Controllers
 
             _logger.LogInformation("Employee {Id} deactivated through the API", id);
             return Ok(new { id, isActive = false, message = "Employee deactivated" });
+        }
+
+        /// <summary>
+        /// Permanently delete an employee. Allowed only when they have NO
+        /// attendance history and NO device mappings — otherwise you would
+        /// orphan payroll rows, so the API refuses and you should
+        /// <c>deactivate</c> instead.
+        /// </summary>
+        [HttpDelete("{id:int}")]
+        [Authorize(Roles = Roles.Admin)]
+        [ProducesResponseType(204)]
+        [ProducesResponseType(typeof(ApiError), 400)]
+        [ProducesResponseType(typeof(ApiError), 404)]
+        public async Task<IActionResult> Delete(int id)
+        {
+            var existing = await _employees.GetEmployeeByIdAsync(id);
+            if (existing is null)
+                return NotFound(ApiError.From($"Employee {id} not found"));
+
+            var punchCount = await _db.AttendanceLogs.CountAsync(a => a.EmployeeId == id);
+            if (punchCount > 0)
+                return BadRequest(ApiError.From(
+                    $"Employee {id} has {punchCount} attendance record(s). Deactivate them instead of deleting, " +
+                    "or purge their punches first from the Punches screen."));
+
+            var maps = await _db.EmployeeDevices.Where(ed => ed.EmployeeId == id).ToListAsync();
+            _db.EmployeeDevices.RemoveRange(maps);
+
+            var accounts = await _db.ApiUsers.Where(u => u.EmployeeId == id).ToListAsync();
+            foreach (var a in accounts) a.EmployeeId = null; // unlink, keep the login
+
+            _db.Employees.Remove(await _db.Employees.FirstAsync(e => e.EmployeeId == id));
+            await _db.SaveChangesAsync();
+
+            _logger.LogWarning("Employee {Id} permanently deleted by {User}", id, User.Identity?.Name);
+            return NoContent();
         }
 
         /// <summary>Link an employee to biometric devices.</summary>

@@ -6,12 +6,11 @@ import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Employees from './pages/Employees'
 import Departments from './pages/Departments'
-import WorkShifts from './pages/WorkShifts'
 import Branches from './pages/Branches'
 import Devices from './pages/Devices'
-import AttendanceLog from './pages/AttendanceLog'
+import Attendance from './pages/Attendance'
+import ErrorLog from './pages/ErrorLog'
 import DailyReport from './pages/DailyReport'
-import RangeReport from './pages/RangeReport'
 import UnregisteredIds from './pages/UnregisteredIds'
 import Profile from './pages/Profile'
 import RegisterUser from './pages/RegisterUser'
@@ -42,15 +41,14 @@ export default function App() {
       >
         <Route index element={<Home />} />
 
+        <Route path="attendance" element={<Manager><Attendance /></Manager>} />
         <Route path="employees" element={<Manager><Employees /></Manager>} />
         <Route path="departments" element={<Manager><Departments /></Manager>} />
-        <Route path="work-shifts" element={<Manager><WorkShifts /></Manager>} />
         <Route path="unregistered" element={<Manager><UnregisteredIds /></Manager>} />
         <Route path="branches" element={<Manager><Branches /></Manager>} />
         <Route path="devices" element={<Manager><Devices /></Manager>} />
-        <Route path="attendance" element={<Manager><AttendanceLog /></Manager>} />
+        <Route path="errors" element={<Manager><ErrorLog /></Manager>} />
         <Route path="reports/daily" element={<Manager><DailyReport /></Manager>} />
-        <Route path="reports/range" element={<Manager><RangeReport /></Manager>} />
 
         <Route path="users/new" element={<RoleGate roles={['Admin']}><RegisterUser /></RoleGate>} />
         <Route path="profile" element={<Profile />} />

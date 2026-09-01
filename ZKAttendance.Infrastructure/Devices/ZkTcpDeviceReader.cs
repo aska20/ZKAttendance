@@ -50,7 +50,7 @@ namespace ZKAttendance.Infrastructure.Devices
         private static readonly byte[] TcpTop = { 0x50, 0x50, 0x82, 0x7d };
 
         private readonly ILogger<ZkTcpDeviceReader> _logger;
-        private readonly int _commPassword;
+        private int _commPassword;
         private readonly int _timeoutMs;
 
         private TcpClient? _tcp;
@@ -68,9 +68,10 @@ namespace ZKAttendance.Infrastructure.Devices
 
         // ── IZkDeviceReader ──────────────────────────────────────────────
 
-        public async Task<bool> ConnectAsync(string ip, int port)
+        public async Task<bool> ConnectAsync(string ip, int port, int commPassword = 0)
         {
             _ip = ip;
+            if (commPassword != 0) _commPassword = commPassword;
             _tcp = new TcpClient { ReceiveTimeout = _timeoutMs, SendTimeout = _timeoutMs };
 
             using (var cts = new CancellationTokenSource(_timeoutMs))

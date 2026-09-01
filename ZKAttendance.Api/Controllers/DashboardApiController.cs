@@ -41,7 +41,13 @@ namespace ZKAttendance.Api.Controllers
         {
             var today = DateTime.Today;
 
-            var totalEmployees = await _context.Employees.CountAsync();
+            // Active only. A deactivated ("deleted") employee still has payroll
+            // history but must not count towards headcount or today's absentees.
+            var totalEmployees = await _context.Employees.CountAsync(e => e.IsActive);
+            var activeEmployeeIds = await _context.Employees
+                .Where(e => e.IsActive)
+                .Select(e => e.EmployeeId)
+                .ToListAsync();
 
             var todayLogs = await _context.AttendanceLogs
                 .Where(a => a.AttendanceTime.Date == today)
@@ -52,7 +58,7 @@ namespace ZKAttendance.Api.Controllers
             // is not one of "our" employees, so it must not inflate the present
             // count or push the absent count negative.
             var presentToday = todayLogs
-                .Where(l => l.EmployeeId.HasValue)
+                .Where(l => l.EmployeeId.HasValue && activeEmployeeIds.Contains(l.EmployeeId.Value))
                 .Select(l => l.EmployeeId!.Value)
                 .Distinct()
                 .Count();

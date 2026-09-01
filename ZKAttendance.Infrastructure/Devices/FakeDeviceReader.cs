@@ -40,7 +40,7 @@ namespace ZKAttendance.Infrastructure.Devices
 
         public FakeDeviceReader(ILogger<FakeDeviceReader> logger) => _logger = logger;
 
-        public Task<bool> ConnectAsync(string ip, int port)
+        public Task<bool> ConnectAsync(string ip, int port, int commPassword = 0)
         {
             _ip = ip;
             _connected = true;

@@ -43,7 +43,7 @@ export default function UnregisteredIds() {
     <div>
       <PageHeader
         title="Unregistered Biometric IDs"
-        subtitle="Punches the system stored but could not attribute to an employee"
+        subtitle="Check-ins the system stored but could not attribute to an employee"
       />
       {error && <ErrorText>{error}</ErrorText>}
       <Card className="mb-4 p-4 text-sm text-slate-600">

@@ -6,6 +6,7 @@ import {
   updateEmployee,
   deactivateEmployee,
 } from '../api/employees'
+import { employees as employeesApi } from '../api/resources'
 import { apiErrorMessage } from '../lib/errors'
 
 const emptyForm = {
@@ -117,6 +118,17 @@ export default function Employees() {
     }
   }
 
+  async function onDelete(emp) {
+    if (!confirm(`Permanently delete ${emp.employeeName}? This only works if they have no attendance records.`)) return
+    try {
+      await employeesApi.remove(emp.employeeId)
+      await refresh()
+    } catch (err) {
+      // 400 = has history → fall back to deactivate
+      setError(apiErrorMessage(err))
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -135,6 +147,7 @@ export default function Employees() {
         <table className="w-full text-sm">
           <thead className="text-left text-slate-500">
             <tr className="border-b border-slate-100">
+              <th className="px-5 py-2 font-medium">ID</th>
               <th className="px-5 py-2 font-medium">Name</th>
               <th className="px-5 py-2 font-medium">Biometric ID</th>
               <th className="px-5 py-2 font-medium">Department</th>
@@ -146,19 +159,20 @@ export default function Employees() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="px-5 py-4 text-slate-500">
+                <td colSpan={7} className="px-5 py-4 text-slate-500">
                   Loading…
                 </td>
               </tr>
             ) : employees.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-5 py-4 text-slate-500">
+                <td colSpan={7} className="px-5 py-4 text-slate-500">
                   No employees yet.
                 </td>
               </tr>
             ) : (
               employees.map((emp) => (
                 <tr key={emp.employeeId} className="border-b border-slate-50 last:border-0">
+                  <td className="px-5 py-2 text-slate-400 tabular-nums">{emp.employeeId}</td>
                   <td className="px-5 py-2 font-medium text-slate-800">{emp.employeeName}</td>
                   <td className="px-5 py-2">{emp.biometricUserId}</td>
                   <td className="px-5 py-2">{deptName(emp.departmentId)}</td>
@@ -184,11 +198,17 @@ export default function Employees() {
                     {emp.isActive && (
                       <button
                         onClick={() => onDeactivate(emp)}
-                        className="ml-3 text-red-600 hover:underline"
+                        className="ml-3 text-amber-600 hover:underline"
                       >
                         Deactivate
                       </button>
                     )}
+                    <button
+                      onClick={() => onDelete(emp)}
+                      className="ml-3 text-red-600 hover:underline"
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))

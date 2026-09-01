@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ZKAttendance.Api.Security;
 using ZKAttendance.Application.Dtos;
+using ZKAttendance.Application.Dtos.Api;
 using ZKAttendance.Application.Services.Attendances;
 using ZKAttendance.Infrastructure.Persistence;
 using ZKAttendance.Infrastructure.Services.Attendances;
@@ -111,6 +112,166 @@ namespace ZKAttendance.Api.Controllers
                     averageWorkHours = ordered.Where(v => v.WorkingHours > 0).Select(v => v.WorkingHours).DefaultIfEmpty(0).Average()
                 },
                 items = paged
+            });
+        }
+
+        /// <summary>
+        /// Raw individual punches (not grouped), newest first, paged. For the
+        /// admin who needs to see and remove specific rows — test data, a
+        /// double scan, a punch on the wrong device.
+        /// </summary>
+        /// <param name="onlyUnattributed">Only punches with no employee link.</param>
+        /// <param name="onlyManual">Only punches entered by hand.</param>
+        /// <param name="date">Restrict to one Gregorian day.</param>
+        /// <param name="page">1-based; page size 100.</param>
+        [HttpGet("punches")]
+        [Authorize(Roles = Roles.Management)]
+        [ProducesResponseType(200)]
+        public async Task<IActionResult> Punches(
+            [FromQuery] bool onlyUnattributed = false,
+            [FromQuery] bool onlyManual = false,
+            [FromQuery] DateTime? date = null,
+            [FromQuery] int page = 1)
+        {
+            const int pageSize = 100;
+            var q = _context.AttendanceLogs.AsNoTracking()
+                .Include(a => a.Device)
+                .Include(a => a.Branch)
+                .AsQueryable();
+
+            if (onlyUnattributed) q = q.Where(a => a.EmployeeId == null);
+            if (onlyManual) q = q.Where(a => a.IsManual);
+            if (date is { } d) q = q.Where(a => a.AttendanceTime.Date == d.Date);
+
+            var total = await q.CountAsync();
+            var rows = await q
+                .OrderByDescending(a => a.AttendanceTime)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(a => new
+                {
+                    a.LogId,
+                    a.EmployeeId,
+                    a.BiometricUserId,
+                    a.AttendanceTime,
+                    a.AttendanceType,
+                    a.IsManual,
+                    a.Notes,
+                    device = a.Device != null ? a.Device.DeviceName : null,
+                    branch = a.Branch != null ? a.Branch.BranchName : null
+                })
+                .ToListAsync();
+
+            return Ok(new { page, pageSize, total, totalPages = (int)Math.Ceiling(total / (double)pageSize), items = rows });
+        }
+
+        /// <summary>Delete one punch by its LogId. Admin only.</summary>
+        [HttpDelete("punches/{logId:long}")]
+        [Authorize(Roles = Roles.Admin)]
+        [ProducesResponseType(204)]
+        [ProducesResponseType(404)]
+        public async Task<IActionResult> DeletePunch(long logId)
+        {
+            var row = await _context.AttendanceLogs.FirstOrDefaultAsync(a => a.LogId == logId);
+            if (row is null) return NotFound();
+
+            _context.AttendanceLogs.Remove(row);
+            await _context.SaveChangesAsync();
+            _logger.LogInformation("Punch {LogId} deleted by {User}", logId, User.Identity?.Name);
+            return NoContent();
+        }
+
+        /// <summary>
+        /// Bulk-delete punches. Admin only. <paramref name="scope"/> is
+        /// "unattributed" (EmployeeId is null — safe, never payroll data),
+        /// "manual" (hand-entered rows), or "all" (everything in the range).
+        /// Without <paramref name="from"/>/<paramref name="to"/> it covers all dates.
+        /// </summary>
+        [HttpPost("punches/purge")]
+        [Authorize(Roles = Roles.Admin)]
+        [ProducesResponseType(200)]
+        [ProducesResponseType(typeof(ApiError), 400)]
+        public async Task<IActionResult> Purge(
+            [FromQuery] string scope = "unattributed",
+            [FromQuery] DateTime? from = null,
+            [FromQuery] DateTime? to = null)
+        {
+            var q = _context.AttendanceLogs.AsQueryable();
+            var wipeEverything = false;
+
+            switch (scope.ToLowerInvariant())
+            {
+                case "unattributed": q = q.Where(a => a.EmployeeId == null); break;
+                case "manual": q = q.Where(a => a.IsManual); break;
+                case "all": wipeEverything = from is null && to is null; break;
+                default:
+                    return BadRequest(ApiError.From("scope must be 'unattributed', 'manual' or 'all'"));
+            }
+
+            if (from is { } f) q = q.Where(a => a.AttendanceTime >= f.Date);
+            if (to is { } t) q = q.Where(a => a.AttendanceTime < t.Date.AddDays(1));
+
+            var deleted = await q.ExecuteDeleteAsync();
+
+            // "all" with no date bounds is a full reset — also clear the runtime
+            // logs the dashboard reads (sync history, device errors/status).
+            var syncLogs = 0;
+            var deviceLogs = 0;
+            if (wipeEverything)
+            {
+                syncLogs = await _context.SyncLogs.ExecuteDeleteAsync();
+                deviceLogs = await _context.DeviceErrors.ExecuteDeleteAsync();
+                await _context.DeviceStatuses.ExecuteDeleteAsync();
+            }
+
+            _logger.LogWarning("Purged {Count} punch(es) (scope={Scope}) by {User}", deleted, scope, User.Identity?.Name);
+            return Ok(new { deleted, scope, syncLogsCleared = syncLogs, deviceErrorsCleared = deviceLogs });
+        }
+
+        /// <summary>
+        /// Every individual punch for one employee on one day, in time order —
+        /// the full trail behind a single "Present" cell, however many times
+        /// they scanned in and out.
+        /// </summary>
+        [HttpGet("day")]
+        [Authorize(Roles = Roles.Management)]
+        [ProducesResponseType(200)]
+        public async Task<IActionResult> Day([FromQuery] int employeeId, [FromQuery] DateTime date)
+        {
+            var day = date.Date;
+            var emp = await _context.Employees.AsNoTracking()
+                .FirstOrDefaultAsync(e => e.EmployeeId == employeeId);
+            if (emp is null) return NotFound(ApiError.From($"Employee {employeeId} not found"));
+
+            var punches = await _context.AttendanceLogs.AsNoTracking()
+                .Include(a => a.Device)
+                .Include(a => a.Branch)
+                .Where(a => a.EmployeeId == employeeId
+                            && a.AttendanceTime >= day
+                            && a.AttendanceTime < day.AddDays(1))
+                .OrderBy(a => a.AttendanceTime)
+                .Select(a => new
+                {
+                    a.LogId,
+                    time = a.AttendanceTime,
+                    a.AttendanceType,
+                    a.VerifyMethod,
+                    a.IsManual,
+                    a.Notes,
+                    device = a.Device != null ? a.Device.DeviceName : null,
+                    branch = a.Branch != null ? a.Branch.BranchName : null
+                })
+                .ToListAsync();
+
+            return Ok(new
+            {
+                employeeId,
+                employeeName = emp.EmployeeName,
+                dateAd = day.ToString("yyyy-MM-dd"),
+                count = punches.Count,
+                firstIn = punches.FirstOrDefault()?.time,
+                lastOut = punches.Count > 1 ? punches.Last().time : (DateTime?)null,
+                punches
             });
         }
 

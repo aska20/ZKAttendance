@@ -122,7 +122,7 @@ namespace ZKAttendance.Infrastructure.Services.Devices
                 // ── 1. Connect ─────────────────────────────────────────────
                 using var reader = _readerFactory();
 
-                if (!await reader.ConnectAsync(device.DeviceIP, device.DevicePort))
+                if (!await reader.ConnectAsync(device.DeviceIP, device.DevicePort, device.CommPassword))
                     throw new InvalidOperationException(
                         $"Could not connect to {device.DeviceIP}:{device.DevicePort}");
 

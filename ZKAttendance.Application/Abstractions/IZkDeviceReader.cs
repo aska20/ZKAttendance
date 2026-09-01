@@ -40,7 +40,8 @@ namespace ZKAttendance.Application.Abstractions
     /// </summary>
     public interface IZkDeviceReader : IDisposable
     {
-        Task<bool> ConnectAsync(string ip, int port);
+        /// <param name="commPassword">The device Comm Key. 0 = none.</param>
+        Task<bool> ConnectAsync(string ip, int port, int commPassword = 0);
         Task DisconnectAsync();
 
         Task<DeviceInfo?> GetDeviceInfoAsync();

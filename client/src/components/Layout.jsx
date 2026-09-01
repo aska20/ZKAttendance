@@ -3,15 +3,14 @@ import { useAuth } from '../context/AuthContext'
 
 const managerNav = [
   { to: '/', label: 'Dashboard', end: true },
+  { to: '/attendance', label: 'Attendance' },
   { to: '/employees', label: 'Employees' },
   { to: '/departments', label: 'Departments' },
-  { to: '/work-shifts', label: 'Work Shifts' },
   { to: '/unregistered', label: 'Unregistered IDs' },
   { to: '/branches', label: 'Branches' },
   { to: '/devices', label: 'Devices' },
-  { to: '/attendance', label: 'Attendance Logs' },
   { to: '/reports/daily', label: 'Daily Report' },
-  { to: '/reports/range', label: 'Range Report' },
+  { to: '/errors', label: 'Error Log' },
 ]
 
 const employeeNav = [{ to: '/my-attendance', label: 'My Attendance' }]

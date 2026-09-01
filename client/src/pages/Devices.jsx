@@ -6,7 +6,7 @@ import { PageHeader, Button, Table, Modal, Field, Input, Select, ErrorText, Badg
 
 const empty = {
   deviceName: '', deviceIP: '', devicePort: 4370, serialNumber: '',
-  deviceModel: '', branchId: '', role: 'Slave', isActive: true,
+  deviceModel: '', branchId: '', role: 'Slave', commPassword: 0, isActive: true,
 }
 
 export default function Devices() {
@@ -30,7 +30,8 @@ export default function Devices() {
     setForm({
       deviceName: d.deviceName || '', deviceIP: d.deviceIP || '', devicePort: d.devicePort ?? 4370,
       serialNumber: d.serialNumber || '', deviceModel: d.deviceModel || '',
-      branchId: d.branchId ? String(d.branchId) : '', role: d.role || 'Slave', isActive: d.isActive,
+      branchId: d.branchId ? String(d.branchId) : '', role: d.role || 'Slave',
+      commPassword: d.commPassword ?? 0, isActive: d.isActive,
     })
     setFormError(''); setEditing(d)
   }
@@ -38,7 +39,12 @@ export default function Devices() {
   async function save(e) {
     e.preventDefault()
     setSaving(true); setFormError('')
-    const body = { ...form, devicePort: Number(form.devicePort), branchId: Number(form.branchId) }
+    const body = {
+      ...form,
+      devicePort: Number(form.devicePort),
+      branchId: Number(form.branchId),
+      commPassword: Number(form.commPassword) || 0,
+    }
     try {
       if (editing.deviceId) await devices.update(editing.deviceId, body)
       else await devices.create(body)
@@ -108,9 +114,20 @@ export default function Devices() {
               <Field label="IP address" required><Input {...nf('deviceIP')} required /></Field>
               <Field label="Port"><Input type="number" {...nf('devicePort')} /></Field>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <Field label="Serial number"><Input {...nf('serialNumber')} /></Field>
               <Field label="Model"><Input {...nf('deviceModel')} /></Field>
+              <Field label="Comm password" hint="Comm Key on the device. Blank / 0 = none">
+                <Input
+                  type="text"
+                  inputMode="numeric"
+                  value={form.commPassword === 0 ? '' : form.commPassword}
+                  onChange={(e) =>
+                    setForm({ ...form, commPassword: e.target.value.replace(/\D/g, '') })
+                  }
+                  placeholder="0"
+                />
+              </Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Branch" required>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { attendance } from '../api/resources'
 import { apiErrorMessage } from '../lib/errors'
 import { PageHeader, Card, Table, Field, Select, ErrorText, Badge } from '../components/ui'
+import { ymd, hm } from '../lib/dates'
 
 const QUICK = [
   ['last30days', 'Last 30 days'], ['last7days', 'Last 7 days'],
@@ -24,9 +25,9 @@ export default function MyAttendance() {
   }, [quickFilter])
 
   const columns = [
-    { key: 'date', header: 'Date', render: (r) => <div><div>{r.nepaliDate}</div><div className="text-xs text-slate-400">{new Date(r.date).toLocaleDateString()}</div></div> },
-    { key: 'in', header: 'In', render: (r) => r.checkInTime ? new Date(r.checkInTime).toLocaleTimeString() : '—' },
-    { key: 'out', header: 'Out', render: (r) => r.checkOutTime ? new Date(r.checkOutTime).toLocaleTimeString() : '—' },
+    { key: 'date', header: 'Date', render: (r) => <div><div>{r.nepaliDate} BS</div><div className="text-xs text-slate-400">{ymd(r.date)}</div></div> },
+    { key: 'in', header: 'In', render: (r) => r.checkInTime ? hm(r.checkInTime) : '—' },
+    { key: 'out', header: 'Out', render: (r) => r.checkOutTime ? hm(r.checkOutTime) : '—' },
     { key: 'hours', header: 'Hours', render: (r) => r.workingHours?.toFixed(2) ?? '0' },
     { key: 'status', header: 'Status', render: (r) => <Badge tone={r.status === 'Full Day' ? 'green' : 'amber'}>{r.status}</Badge> },
   ]

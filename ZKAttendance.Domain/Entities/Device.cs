@@ -32,6 +32,13 @@ namespace ZKAttendance.Domain.Entities
         [MaxLength(100)]
         public string? DeviceModel { get; set; }
 
+        /// <summary>
+        /// The device Communication Password (Comm Key) set on the terminal
+        /// itself. 0 = none (factory default). The reader sends it during the
+        /// connection handshake.
+        /// </summary>
+        public int CommPassword { get; set; } = 0;
+
         public bool IsActive { get; set; } = true;
 
         /// <summary>

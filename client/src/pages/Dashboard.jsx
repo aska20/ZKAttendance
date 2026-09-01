@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getDashboardSummary } from '../api/dashboard'
 import { apiErrorMessage } from '../lib/errors'
+import { dateTime, hm } from '../lib/dates'
 
 function Stat({ label, value }) {
   return (
@@ -52,7 +53,7 @@ export default function Dashboard() {
         <Stat label="Late today" value={today.late} />
         <Stat
           label="Last sync"
-          value={lastSyncTime ? new Date(lastSyncTime).toLocaleString() : '—'}
+          value={lastSyncTime ? dateTime(lastSyncTime) : '—'}
         />
       </div>
 
@@ -77,7 +78,8 @@ export default function Dashboard() {
               {recentLogs.map((l) => (
                 <tr key={l.logId} className="border-b border-slate-50 last:border-0">
                   <td className="px-5 py-2">
-                    {new Date(l.punchTimeAd).toLocaleTimeString()}
+                    {hm(l.punchTimeAd)}
+                    <span className="ml-2 text-xs text-slate-400">{l.punchTimeBs} BS</span>
                   </td>
                   <td className="px-5 py-2">{l.biometricUserId}</td>
                   <td className="px-5 py-2">{l.attendanceType || '—'}</td>

@@ -79,6 +79,7 @@ namespace ZKAttendance.Api.Controllers
                     DevicePort = request.DevicePort,
                     SerialNumber = request.SerialNumber,
                     DeviceModel = request.DeviceModel,
+                    CommPassword = request.CommPassword,
                     BranchId = request.BranchId,
                     Role = role,
                     IsActive = request.IsActive,
@@ -113,6 +114,7 @@ namespace ZKAttendance.Api.Controllers
             existing.DevicePort = request.DevicePort;
             existing.SerialNumber = request.SerialNumber;
             existing.DeviceModel = request.DeviceModel;
+            existing.CommPassword = request.CommPassword;
             existing.BranchId = request.BranchId;
             existing.Role = role;
             existing.IsActive = request.IsActive;
@@ -196,6 +198,7 @@ namespace ZKAttendance.Api.Controllers
             d.DevicePort,
             d.SerialNumber,
             d.DeviceModel,
+            d.CommPassword,
             d.BranchId,
             role = d.Role.ToString(),
             d.IsActive,

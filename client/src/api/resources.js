@@ -23,15 +23,6 @@ export const branches = {
   remove: (id) => del(`/Branches/${id}`),
 }
 
-// ── Work shifts ──────────────────────────────────────────────
-export const workshifts = {
-  list: () => get('/WorkShifts'),
-  get: (id) => get(`/WorkShifts/${id}`),
-  create: (b) => post('/WorkShifts', b),
-  update: (id, b) => put(`/WorkShifts/${id}`, b),
-  remove: (id) => del(`/WorkShifts/${id}`),
-}
-
 // ── Devices ──────────────────────────────────────────────────
 export const devices = {
   list: (onlineOnly) => get('/Devices', onlineOnly ? { onlineOnly: true } : undefined),
@@ -50,6 +41,7 @@ export const employees = {
   create: (b) => post('/Employees', b),
   update: (id, b) => put(`/Employees/${id}`, b),
   deactivate: (id) => post(`/Employees/${id}/deactivate`),
+  remove: (id) => del(`/Employees/${id}`),
   unregistered: () => get('/Employees/unregistered'),
   enrollOnDevices: (id, b) => post(`/Employees/${id}/enroll-on-devices`, b),
 }
@@ -60,6 +52,30 @@ export const attendance = {
   logFilters: () => get('/Attendance/log/filters'),
   my: (params) => get('/Attendance/my', params),
   manual: (b) => post('/Attendance/manual', b),
+  punches: (params) => get('/Attendance/punches', params),
+  deletePunch: (logId) => del(`/Attendance/punches/${logId}`),
+  purge: (params) => post(`/Attendance/punches/purge?${new URLSearchParams(params)}`),
+  day: (employeeId, date) => get('/Attendance/day', { employeeId, date }),
+}
+
+// ── Overview (pivot) ─────────────────────────────────────────
+export const overview = {
+  get: (params) => get('/Overview', params),
+}
+
+// ── Holidays ─────────────────────────────────────────────────
+export const holidays = {
+  list: (params) => get('/Holidays', params),
+  create: (b) => post('/Holidays', b),
+  removeOnDate: (date) => del(`/Holidays/on/${date}`),
+}
+
+// ── Error log ────────────────────────────────────────────────
+export const errorLog = {
+  list: (params) => get('/ErrorLog', params),
+  openCount: () => get('/ErrorLog/open-count'),
+  resolve: (id, resolution) => post(`/ErrorLog/${id}/resolve`, { resolution }),
+  clearResolved: () => post('/ErrorLog/clear-resolved'),
 }
 
 // ── Reports ──────────────────────────────────────────────────

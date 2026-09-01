@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { reports } from '../api/resources'
 import { apiErrorMessage } from '../lib/errors'
 import { PageHeader, Card, Table, Field, Input, Button, ErrorText, Badge } from '../components/ui'
+import { hm } from '../lib/dates'
 
 export default function DailyReport() {
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
@@ -22,8 +23,8 @@ export default function DailyReport() {
     { key: 'employeeName', header: 'Employee', render: (r) => <span className="font-medium text-slate-800">{r.employeeName}</span> },
     { key: 'biometricUserId', header: 'ID' },
     { key: 'department', header: 'Department', render: (r) => r.department || '—' },
-    { key: 'firstCheckIn', header: 'In', render: (r) => r.firstCheckIn ? new Date(r.firstCheckIn).toLocaleTimeString() : '—' },
-    { key: 'lastCheckOut', header: 'Out', render: (r) => r.lastCheckOut ? new Date(r.lastCheckOut).toLocaleTimeString() : '—' },
+    { key: 'firstCheckIn', header: 'First in', render: (r) => r.firstCheckIn ? hm(r.firstCheckIn) : '—' },
+    { key: 'lastCheckOut', header: 'Last out', render: (r) => r.lastCheckOut ? hm(r.lastCheckOut) : '—' },
     { key: 'totalWorkHoursFormatted', header: 'Hours', render: (r) => r.totalWorkHoursFormatted },
     { key: 'status', header: 'Status', render: (r) => <Badge tone={r.status === 'Present' ? 'green' : r.status === 'Absent' ? 'red' : 'amber'}>{r.status}</Badge> },
   ]
