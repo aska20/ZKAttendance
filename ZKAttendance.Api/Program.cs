@@ -21,11 +21,7 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Configuration.AddJsonFile(
-    "appsettings.Local.json",
-    optional: true,
-    reloadOnChange: true
-);
+
 // ═══════════════════════════════════════════════════════
 // Controllers + JSON settings (API only — no Razor views)
 // ═══════════════════════════════════════════════════════

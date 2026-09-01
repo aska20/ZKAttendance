@@ -1,6 +1,0 @@
-
-{
-    "ConnectionStrings": {
-    "DefaultConnection": "Server=DESKTOP-NAAT855;Database=ZKAttendanceWebDB;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true"
-  }
-}
