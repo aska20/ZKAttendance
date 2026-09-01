@@ -48,6 +48,7 @@ export default function Dashboard() {
         <Stat label="Active devices" value={counters.activeDevices} />
         <Stat label="Present today" value={today.present} />
         <Stat label="Absent today" value={today.absent} />
+        <Stat label="Unattributed punches" value={today.unattributed ?? 0} />
         <Stat label="Late today" value={today.late} />
         <Stat
           label="Last sync"

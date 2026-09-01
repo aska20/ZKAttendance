@@ -47,7 +47,21 @@ namespace ZKAttendance.Api.Controllers
                 .Where(a => a.AttendanceTime.Date == today)
                 .ToListAsync();
 
-            var presentToday = todayLogs.Select(l => l.BiometricUserId).Distinct().Count();
+            // Count people, not raw punch ids. A punch whose biometric id is not
+            // mapped to an employee yet (EmployeeId == null) is real data but it
+            // is not one of "our" employees, so it must not inflate the present
+            // count or push the absent count negative.
+            var presentToday = todayLogs
+                .Where(l => l.EmployeeId.HasValue)
+                .Select(l => l.EmployeeId!.Value)
+                .Distinct()
+                .Count();
+
+            var unattributedToday = todayLogs
+                .Where(l => l.EmployeeId is null)
+                .Select(l => l.BiometricUserId)
+                .Distinct()
+                .Count();
 
             var lastSyncTime = await _context.AttendanceLogs
                 .Where(a => a.IsSynced)
@@ -85,7 +99,8 @@ namespace ZKAttendance.Api.Controllers
                 today = new
                 {
                     present = presentToday,
-                    absent = totalEmployees - presentToday,
+                    absent = Math.Max(0, totalEmployees - presentToday),
+                    unattributed = unattributedToday, // punched but not linked to an employee
                     late = 0,        // TODO: apply late-arrival shift rules
                     earlyLeave = 0   // TODO: apply early-departure shift rules
                 },
