@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { employees } from '../api/resources'
 import { useAsync } from '../hooks/useAsync'
 import { apiErrorMessage } from '../lib/errors'
-import { PageHeader, Card, Table, Modal, Field, Input, Button, ErrorText } from '../components/ui'
+import { PageHeader, Table, Modal, Field, Input, Button, ErrorText } from '../components/ui'
 
 export default function UnregisteredIds() {
   const { data, loading, error, reload } = useAsync(() => employees.unregistered(), [])
@@ -43,19 +43,14 @@ export default function UnregisteredIds() {
     <div>
       <PageHeader
         title="Unregistered Biometric IDs"
-        subtitle="Check-ins the system stored but could not attribute to an employee"
+        subtitle="Biometric IDs seen in scans that no employee record claims"
       />
       {error && <ErrorText>{error}</ErrorText>}
-      <Card className="mb-4 p-4 text-sm text-slate-600">
-        These IDs appear in the attendance log but no employee record claims them. Create
-        the employee here (the ID is kept as their primary biometric ID), then enrol them on
-        the relevant devices from the Employees screen.
-      </Card>
       <Table
         columns={columns}
         rows={ids.map((id) => ({ id, _key: id }))}
         loading={loading}
-        empty="Every punched ID maps to an employee. Nothing to do."
+        empty="No unregistered IDs."
       />
 
       {target && (

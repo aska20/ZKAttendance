@@ -59,6 +59,21 @@ namespace ZKAttendance.Domain.Entities
 
         public bool IsActive { get; set; } = true;
 
+        // ═════════════════════════════════════════════════════════════
+        // Approval — an employee added by HR is "Pending" until an Admin
+        // approves it. An employee added by an Admin is "Approved" straight away.
+        // ═════════════════════════════════════════════════════════════
+        [StringLength(20)]
+        public string ApprovalStatus { get; set; } = "Approved";   // Approved | Pending | Rejected
+
+        /// <summary>ApiUser id of whoever created this record.</summary>
+        public int? RequestedByUserId { get; set; }
+
+        /// <summary>ApiUser id of the Admin who approved or rejected it.</summary>
+        public int? ApprovedByUserId { get; set; }
+
+        public DateTime? ApprovedDate { get; set; }
+
         public DateTime CreatedDate { get; set; } = DateTime.Now;
 
         public DateTime? ModifiedDate { get; set; }

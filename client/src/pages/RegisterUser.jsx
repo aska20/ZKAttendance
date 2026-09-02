@@ -30,7 +30,7 @@ export default function RegisterUser() {
 
   return (
     <div className="max-w-lg">
-      <PageHeader title="Register User" subtitle="Admin-only. Creates a login account." />
+      <PageHeader title="Register User" />
       <Card className="p-5">
         <form onSubmit={submit} className="space-y-4">
           <ErrorText>{error}</ErrorText>
@@ -47,7 +47,7 @@ export default function RegisterUser() {
               <option value="Admin">Admin</option>
             </Select>
           </Field>
-          <Field label="Link to employee (biometric ID)" hint="Optional. Matches the account to an existing employee record.">
+          <Field label="Link to employee (biometric ID)" hint="Optional">
             <Input value={form.biometricUserId} onChange={set('biometricUserId')} />
           </Field>
           <Button type="submit" disabled={saving}>{saving ? 'Creating…' : 'Create account'}</Button>

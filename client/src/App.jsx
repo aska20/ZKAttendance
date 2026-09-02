@@ -15,6 +15,7 @@ import UnregisteredIds from './pages/UnregisteredIds'
 import Profile from './pages/Profile'
 import RegisterUser from './pages/RegisterUser'
 import MyAttendance from './pages/MyAttendance'
+import PendingApprovals from './pages/PendingApprovals'
 
 const MGMT = ['Admin', 'HR']
 
@@ -50,6 +51,7 @@ export default function App() {
         <Route path="errors" element={<Manager><ErrorLog /></Manager>} />
         <Route path="reports/daily" element={<Manager><DailyReport /></Manager>} />
 
+        <Route path="employees/pending" element={<RoleGate roles={['Admin']}><PendingApprovals /></RoleGate>} />
         <Route path="users/new" element={<RoleGate roles={['Admin']}><RegisterUser /></RoleGate>} />
         <Route path="profile" element={<Profile />} />
         <Route path="my-attendance" element={<MyAttendance />} />

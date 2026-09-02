@@ -3,10 +3,12 @@ import { departments } from '../api/resources'
 import { useAsync } from '../hooks/useAsync'
 import { apiErrorMessage } from '../lib/errors'
 import { PageHeader, Button, Table, Modal, Field, Input, Select, ErrorText, Badge } from '../components/ui'
+import { useFeedback } from '../components/feedback'
 
 const empty = { departmentName: '', departmentCode: '', parentDepartmentId: '', description: '', isActive: true }
 
 export default function Departments() {
+  const fb = useFeedback()
   const { data, loading, error, reload } = useAsync(() => departments.list(), [])
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(empty)
@@ -49,12 +51,19 @@ export default function Departments() {
   }
 
   async function remove(d) {
-    if (!confirm(`Delete department "${d.departmentName}"?`)) return
+    const ok = await fb.confirm({
+      title: 'Delete department',
+      message: `Delete "${d.departmentName}"?`,
+      confirmText: 'Delete',
+      danger: true,
+    })
+    if (!ok) return
     try {
       await departments.remove(d.departmentId)
+      fb.success('Department deleted')
       reload()
     } catch (err) {
-      alert(apiErrorMessage(err))
+      fb.error(apiErrorMessage(err))
     }
   }
 
@@ -94,7 +103,7 @@ export default function Departments() {
             </Field>
             <Field label="Parent department">
               <Select value={form.parentDepartmentId} onChange={(e) => setForm({ ...form, parentDepartmentId: e.target.value })}>
-                <option value="">— none —</option>
+                <option value="">None</option>
                 {list.filter((d) => d.departmentId !== editing.departmentId).map((d) => (
                   <option key={d.departmentId} value={d.departmentId}>{d.departmentName}</option>
                 ))}

@@ -23,8 +23,8 @@ export default function DailyReport() {
     { key: 'employeeName', header: 'Employee', render: (r) => <span className="font-medium text-slate-800">{r.employeeName}</span> },
     { key: 'biometricUserId', header: 'ID' },
     { key: 'department', header: 'Department', render: (r) => r.department || '—' },
-    { key: 'firstCheckIn', header: 'First in', render: (r) => r.firstCheckIn ? hm(r.firstCheckIn) : '—' },
-    { key: 'lastCheckOut', header: 'Last out', render: (r) => r.lastCheckOut ? hm(r.lastCheckOut) : '—' },
+    { key: 'firstCheckIn', header: 'Check in', render: (r) => r.firstCheckIn ? hm(r.firstCheckIn) : '—' },
+    { key: 'lastCheckOut', header: 'Check out', render: (r) => r.lastCheckOut ? hm(r.lastCheckOut) : '—' },
     { key: 'totalWorkHoursFormatted', header: 'Hours', render: (r) => r.totalWorkHoursFormatted },
     { key: 'status', header: 'Status', render: (r) => <Badge tone={r.status === 'Present' ? 'green' : r.status === 'Absent' ? 'red' : 'amber'}>{r.status}</Badge> },
   ]

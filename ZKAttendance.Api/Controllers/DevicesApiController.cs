@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using ZKAttendance.Api.Security;
 using ZKAttendance.Application.Abstractions;
 using ZKAttendance.Application.Dtos.Api;
 using ZKAttendance.Domain.Entities;
@@ -6,11 +8,15 @@ using ZKAttendance.Infrastructure.Services.Devices;
 
 namespace ZKAttendance.Api.Controllers
 {
-    /// <summary>Biometric devices — registration and sync control.</summary>
+    /// <summary>
+    /// Biometric devices. HR can see the list and status; the network details
+    /// (IP, port, serial, comm password) and every write operation are Admin only.
+    /// </summary>
     [Route("api/Devices")]
     [ApiController]
     [Produces("application/json")]
     [Tags("Devices")]
+    [Authorize(Roles = Roles.Management)]
     public class DevicesApiController : ControllerBase
     {
         private readonly IDeviceService _devices;
@@ -26,6 +32,8 @@ namespace ZKAttendance.Api.Controllers
             _sync = sync;
             _logger = logger;
         }
+
+        private bool IsAdmin => User.IsInRole("Admin");
 
         /// <summary>All registered devices.</summary>
         /// <param name="onlineOnly">Return only devices currently reachable.</param>
@@ -61,6 +69,7 @@ namespace ZKAttendance.Api.Controllers
         /// database enforces one master with a filtered unique index, because
         /// two enrolment sources produce colliding enrol numbers.
         /// </remarks>
+        [Authorize(Roles = Roles.Admin)]
         [HttpPost]
         [ProducesResponseType(201)]
         [ProducesResponseType(typeof(ApiError), 400)]
@@ -96,6 +105,7 @@ namespace ZKAttendance.Api.Controllers
         }
 
         /// <summary>Update a device.</summary>
+        [Authorize(Roles = Roles.Admin)]
         [HttpPut("{id:int}")]
         [ProducesResponseType(200)]
         [ProducesResponseType(typeof(ApiError), 400)]
@@ -140,6 +150,7 @@ namespace ZKAttendance.Api.Controllers
         /// Duplicates is not a failure — re-reading records already stored is
         /// expected, because most ZKTeco models return their whole log every time.
         /// </remarks>
+        [Authorize(Roles = Roles.Admin)]
         [HttpPost("{id:int}/sync")]
         [ProducesResponseType(200)]
         [ProducesResponseType(typeof(ApiError), 404)]
@@ -154,6 +165,7 @@ namespace ZKAttendance.Api.Controllers
         }
 
         /// <summary>Test whether the device answers on the network.</summary>
+        [Authorize(Roles = Roles.Admin)]
         [HttpPost("{id:int}/test-connection")]
         [ProducesResponseType(200)]
         [ProducesResponseType(typeof(ApiError), 404)]
@@ -173,6 +185,7 @@ namespace ZKAttendance.Api.Controllers
         /// rows reference it by foreign key, and deleting the row would either
         /// fail or orphan them.
         /// </remarks>
+        [Authorize(Roles = Roles.Admin)]
         [HttpPost("{id:int}/deactivate")]
         [ProducesResponseType(200)]
         [ProducesResponseType(typeof(ApiError), 404)]
@@ -190,15 +203,17 @@ namespace ZKAttendance.Api.Controllers
             return Ok(new { id, isActive = false, message = "Device deactivated" });
         }
 
-        private static object Shape(Device d) => new
+        private object Shape(Device d) => new
         {
             d.DeviceId,
             d.DeviceName,
-            d.DeviceIP,
-            d.DevicePort,
-            d.SerialNumber,
-            d.DeviceModel,
-            d.CommPassword,
+            // Network details are Admin-only. HR sees the device exists and
+            // whether it is online, but not how to reach it.
+            deviceIP = IsAdmin ? d.DeviceIP : null,
+            devicePort = IsAdmin ? d.DevicePort : (int?)null,
+            serialNumber = IsAdmin ? d.SerialNumber : null,
+            deviceModel = IsAdmin ? d.DeviceModel : null,
+            commPassword = IsAdmin ? d.CommPassword : (int?)null,
             d.BranchId,
             role = d.Role.ToString(),
             d.IsActive,

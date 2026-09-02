@@ -54,14 +54,26 @@ namespace ZKAttendance.Infrastructure.NepaliCalendar
 
         public DateTime ToAd(string bsText) => NepaliDateConverter.ToAd(NepaliDate.Parse(bsText));
 
-        /// <summary>"2083-01-15"</summary>
-        public string Format(DateTime ad) => ToBs(ad).ToString();
+        /// <summary>
+        /// The BS lookup table only covers roughly 2080-2086 BS. A hire date
+        /// from 2019, or a date far in the future, is outside it. Rather than
+        /// throw and break a whole employee list, fall back to the Gregorian
+        /// date in yyyy-MM-dd form for the Format* helpers.
+        /// </summary>
+        private bool TryToBs(DateTime ad, out NepaliDate bs)
+        {
+            try { bs = NepaliDateConverter.ToBs(ad); return true; }
+            catch (ArgumentOutOfRangeException) { bs = default; return false; }
+        }
+
+        /// <summary>"2083-01-15" (or the AD date if out of the supported BS range).</summary>
+        public string Format(DateTime ad) => TryToBs(ad, out var bs) ? bs.ToString() : ad.ToString("yyyy-MM-dd");
 
         /// <summary>"15 Baisakh 2083"</summary>
-        public string FormatLong(DateTime ad) => ToBs(ad).ToLongString();
+        public string FormatLong(DateTime ad) => TryToBs(ad, out var bs) ? bs.ToLongString() : ad.ToString("yyyy-MM-dd");
 
         /// <summary>"2083-01-15 09:12" - the date is BS, the time is untouched.</summary>
-        public string FormatWithTime(DateTime ad) => $"{ToBs(ad)} {ad:HH:mm}";
+        public string FormatWithTime(DateTime ad) => $"{Format(ad)} {ad:HH:mm}";
 
         public string? FormatNullable(DateTime? ad) => ad.HasValue ? Format(ad.Value) : null;
 

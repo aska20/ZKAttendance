@@ -3,6 +3,7 @@ import { branches } from '../api/resources'
 import { useAsync } from '../hooks/useAsync'
 import { apiErrorMessage } from '../lib/errors'
 import { PageHeader, Button, Table, Modal, Field, Input, ErrorText, Badge } from '../components/ui'
+import { useFeedback } from '../components/feedback'
 
 const empty = {
   branchCode: '', branchName: '', city: '', address: '',
@@ -10,6 +11,7 @@ const empty = {
 }
 
 export default function Branches() {
+  const fb = useFeedback()
   const { data, loading, error, reload } = useAsync(() => branches.list(), [])
   const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(empty)
@@ -43,9 +45,10 @@ export default function Branches() {
   }
 
   async function remove(b) {
-    if (!confirm(`Delete branch "${b.branchName}"?`)) return
-    try { await branches.remove(b.branchId); reload() }
-    catch (err) { alert(apiErrorMessage(err)) }
+    const ok = await fb.confirm({ title: 'Delete branch', message: `Delete "${b.branchName}"?`, confirmText: 'Delete', danger: true })
+    if (!ok) return
+    try { await branches.remove(b.branchId); fb.success('Branch deleted'); reload() }
+    catch (err) { fb.error(apiErrorMessage(err)) }
   }
 
   const columns = [

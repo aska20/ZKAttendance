@@ -17,7 +17,7 @@ export default function DayDetailModal({ employeeId, employeeName, date, dateBs,
   }, [employeeId, date])
 
   return (
-    <Modal title={`${employeeName} — ${dateBs ? dateBs + ' BS  (' + date + ')' : date}`} onClose={onClose} wide>
+    <Modal title={`${employeeName}, ${dateBs ? dateBs + ' BS (' + date + ')' : date}`} onClose={onClose} wide>
       {error && <p className="text-sm text-red-600">{error}</p>}
       {!data && !error && <p className="text-sm text-slate-500">Loading…</p>}
       {data && (
@@ -29,7 +29,7 @@ export default function DayDetailModal({ employeeId, employeeName, date, dateBs,
           </div>
           {data.count === 0 ? (
             <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200">
-              No check-in or check-out — marked <b>Absent</b> for this day.
+              No check-in or check-out. Marked <b>Absent</b> for this day.
             </p>
           ) : (
             <div className="overflow-x-auto">

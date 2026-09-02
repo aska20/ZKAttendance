@@ -44,6 +44,8 @@ namespace ZKAttendance.Infrastructure.Persistence
         public DbSet<ApiUser> ApiUsers { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
 
+        public DbSet<Notification> Notifications { get; set; }
+
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

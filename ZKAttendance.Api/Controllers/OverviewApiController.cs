@@ -115,7 +115,7 @@ namespace ZKAttendance.Api.Controllers
 
             // ── build the grid ─────────────────────────────────────────
             var deptGroups = employees
-                .GroupBy(e => new { Id = e.DepartmentId, Name = e.Department?.DepartmentName ?? "— No department —" })
+                .GroupBy(e => new { Id = e.DepartmentId, Name = e.Department?.DepartmentName ?? "No department" })
                 .OrderBy(g => g.Key.Name)
                 .Select(g => new
                 {

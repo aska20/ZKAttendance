@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { overview, holidays as holidayApi, departments as deptApi, employees as empApi } from '../api/resources'
 import { useAsync } from '../hooks/useAsync'
 import { apiErrorMessage } from '../lib/errors'
 import { ymd, hm } from '../lib/dates'
-import { PageHeader, Card, Field, Input, Select, Button, ErrorText } from '../components/ui'
+import { PageHeader, Card, Field, Input, Button, ErrorText } from '../components/ui'
+import Combobox from '../components/Combobox'
 import DayDetailModal from '../components/DayDetailModal'
+import { useFeedback } from '../components/feedback'
 
 const isoDay = (d) => ymd(d)
 
@@ -24,80 +26,128 @@ function Cell({ cell, onClick }) {
   }
   return (
     <td className="border-l border-slate-100 px-2 py-2 text-center">
-      <button onClick={onClick} className="group inline-flex flex-col items-center" title="View every punch">
-        <span className="text-green-600">✓</span>
-        <span className="text-[10px] leading-tight text-slate-400 group-hover:text-slate-600">
+      <button onClick={onClick} className="group inline-flex flex-col items-center" title="View check-in / check-out detail">
+        <span className="text-lg font-bold leading-none text-green-600">✓</span>
+        <span className="mt-0.5 text-[10px] leading-tight text-slate-500 group-hover:text-slate-700">
           {hm(cell.firstIn)}{cell.lastOut ? '–' + hm(cell.lastOut) : ''}
         </span>
-        {cell.punchCount > 2 && <span className="text-[10px] text-amber-500">{cell.punchCount}×</span>}
       </button>
     </td>
   )
 }
 
 export default function Attendance() {
+  const fb = useFeedback()
   const today = useMemo(() => new Date(), [])
   const [range, setRange] = useState(() => ({
     from: isoDay(new Date(today.getTime() - 6 * 864e5)),
     to: isoDay(today),
   }))
-  const [applied, setApplied] = useState(range)
   const [departmentId, setDepartmentId] = useState('')
-  const [search, setSearch] = useState('')
-  const [appliedFilters, setAppliedFilters] = useState({ departmentId: '', search: '' })
+  const [employeeId, setEmployeeId] = useState('')
 
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [detail, setDetail] = useState(null)
-  const [busyDay, setBusyDay] = useState(null)
 
   const { data: deptList } = useAsync(() => deptApi.list(), [])
   const { data: allEmployees } = useAsync(() => empApi.list(), [])
 
-  function reload() {
-    setLoading(true); setError('')
-    const params = { from: applied.from, to: applied.to }
-    if (appliedFilters.departmentId) params.departmentId = appliedFilters.departmentId
-    if (appliedFilters.search) params.search = appliedFilters.search
-    overview.get(params)
+  const deptOptions = (deptList || []).map((d) => ({ value: String(d.departmentId), label: d.departmentName }))
+  const empOptions = (allEmployees || []).map((e) => ({
+    value: String(e.employeeId), label: e.employeeName, hint: `#${e.biometricUserId}`,
+  }))
+
+  // fetch(): loads the pivot. `silent` skips the loading flag so background
+  // refreshes (e.g. after a holiday toggle) don't blank the table.
+  const timer = useRef(null)
+  function fetchPivot({ silent = false } = {}) {
+    if (!silent) setLoading(true)
+    setError('')
+    const params = { from: range.from, to: range.to }
+    if (departmentId) params.departmentId = departmentId
+    if (employeeId) params.employeeId = employeeId
+    return overview.get(params)
       .then(setData)
       .catch((e) => setError(apiErrorMessage(e)))
-      .finally(() => setLoading(false))
+      .finally(() => { if (!silent) setLoading(false) })
   }
 
-  useEffect(reload, [applied, appliedFilters]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Auto-load when a filter changes, debounced so dragging the date picker
+  // doesn't fire a request on every keystroke.
+  useEffect(() => {
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => fetchPivot(), 250)
+    return () => clearTimeout(timer.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [range.from, range.to, departmentId, employeeId])
 
-  function apply(e) {
-    e.preventDefault()
-    setApplied(range)
-    setAppliedFilters({ departmentId, search: search.trim() })
-  }
-
-  // Click a day header → zoom the range to just that day.
   function focusDay(dateIso) {
     setRange({ from: dateIso, to: dateIso })
-    setApplied({ from: dateIso, to: dateIso })
   }
 
-  // Toggle a day between working-day and holiday.
+  // Recompute the grid locally so a holiday toggle shows instantly, then
+  // reconcile with the server in the background.
+  function patchHoliday(dateIso, makeHoliday, name) {
+    setData((d) => {
+      if (!d) return d
+      const days = d.days.map((day) =>
+        day.dateIso === dateIso
+          ? { ...day, isHoliday: makeHoliday, holidayName: makeHoliday ? (name || 'Holiday') : null }
+          : day,
+      )
+      const workingDayCount = days.filter((x) => !x.isHoliday).length
+      const departments = d.departments.map((dept) => ({
+        ...dept,
+        employees: dept.employees.map((e) => {
+          const cell = e.cells[dateIso]
+          if (!cell) return e
+          let { presentDays, absentDays } = e
+          const nextCells = { ...e.cells }
+          if (makeHoliday) {
+            if (cell.status === 'Present') presentDays -= 1
+            else if (cell.status === 'Absent') absentDays -= 1
+            nextCells[dateIso] = { status: 'Holiday', firstIn: null, lastOut: null, hours: 0, punchCount: 0 }
+          } else {
+            // We don't know present/absent without the punch data — the silent
+            // refetch fixes it; show a neutral placeholder for the moment.
+            nextCells[dateIso] = { status: 'Absent', firstIn: null, lastOut: null, hours: 0, punchCount: 0 }
+            absentDays += 1
+          }
+          return { ...e, cells: nextCells, presentDays, absentDays, totalDays: workingDayCount }
+        }),
+      }))
+      return { ...d, days, workingDayCount, departments }
+    })
+  }
+
   async function toggleHoliday(day) {
-    setBusyDay(day.dateIso)
-    try {
-      if (day.holidayName === 'Weekly off') return // weekly off is fixed
-      const isMarked = day.isHoliday
-      if (isMarked) {
+    if (day.holidayName === 'Weekly off') return
+
+    if (day.isHoliday) {
+      const ok = await fb.confirm({ title: 'Remove holiday', message: `Unmark ${day.dateBs} BS as a holiday?`, confirmText: 'Remove' })
+      if (!ok) return
+      patchHoliday(day.dateIso, false)                 // instant
+      try {
         await holidayApi.removeOnDate(day.dateIso)
-      } else {
-        const name = prompt(`Name this holiday (${day.dateBs} BS):`, 'Holiday')
-        if (name == null) return
-        await holidayApi.create({ holidayName: name || 'Holiday', date: day.dateIso })
+        fetchPivot({ silent: true })                    // reconcile
+      } catch (e) {
+        fb.error(apiErrorMessage(e))
+        fetchPivot({ silent: true })
       }
-      reload()
+      return
+    }
+
+    const name = await fb.promptText({ title: 'Mark as holiday', label: `Name for ${day.dateBs} BS`, defaultValue: 'Holiday' })
+    if (name === null) return
+    patchHoliday(day.dateIso, true, name || 'Holiday')  // instant
+    try {
+      await holidayApi.create({ holidayName: name || 'Holiday', date: day.dateIso })
+      fetchPivot({ silent: true })                      // reconcile
     } catch (e) {
-      setError(apiErrorMessage(e))
-    } finally {
-      setBusyDay(null)
+      fb.error(apiErrorMessage(e))
+      fetchPivot({ silent: true })
     }
   }
 
@@ -125,7 +175,7 @@ export default function Attendance() {
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = `attendance_${applied.from}_to_${applied.to}.csv`
+    a.download = `attendance_${range.from}_to_${range.to}.csv`
     a.click()
     URL.revokeObjectURL(a.href)
   }
@@ -134,44 +184,35 @@ export default function Attendance() {
     <div>
       <PageHeader
         title="Attendance"
-        subtitle={data ? `${data.fromBs} → ${data.toBs} BS  ·  ${data.workingDayCount} working days (Sat + holidays excluded)  ·  ${data.employeeCount} employees` : undefined}
+        subtitle={data ? `${data.fromBs} to ${data.toBs} BS. ${data.workingDayCount} working days, ${data.employeeCount} employees.` : undefined}
         actions={<Button variant="secondary" onClick={exportCsv} disabled={!data}>⭳ Export CSV</Button>}
       />
 
       <Card className="mb-4 p-4">
-        <form onSubmit={apply} className="grid grid-cols-2 gap-3 md:grid-cols-5">
-          <Field label="Start (AD)"><Input type="date" value={range.from} onChange={(e) => setRange({ ...range, from: e.target.value })} /></Field>
-          <Field label="End (AD)"><Input type="date" value={range.to} onChange={(e) => setRange({ ...range, to: e.target.value })} /></Field>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+          <Field label="Start (AD)">
+            <Input type="date" value={range.from} onChange={(e) => setRange({ ...range, from: e.target.value })} />
+          </Field>
+          <Field label="End (AD)">
+            <Input type="date" value={range.to} onChange={(e) => setRange({ ...range, to: e.target.value })} />
+          </Field>
           <Field label="Department">
-            <Select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
-              <option value="">All departments</option>
-              {(deptList || []).map((d) => <option key={d.departmentId} value={d.departmentId}>{d.departmentName}</option>)}
-            </Select>
+            <Combobox options={deptOptions} value={departmentId} onChange={setDepartmentId} placeholder="All departments" />
           </Field>
-          <Field label="Employee" hint="Type to filter — all names listed">
-            <Input
-              list="all-employee-names"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="name or biometric id"
-            />
-            <datalist id="all-employee-names">
-              {(allEmployees || []).map((e) => (
-                <option key={e.employeeId} value={e.employeeName}>{`#${e.biometricUserId}`}</option>
-              ))}
-            </datalist>
+          <Field label="Employee">
+            <Combobox options={empOptions} value={employeeId} onChange={setEmployeeId} placeholder="All employees" />
           </Field>
-          <div className="flex items-end gap-2">
-            <Button type="submit">Apply</Button>
-            <Button type="button" variant="ghost" onClick={() => { setSearch(''); setDepartmentId(''); setAppliedFilters({ departmentId: '', search: '' }) }}>Clear</Button>
+          <div className="flex items-end">
+            {loading
+              ? <span className="text-sm text-slate-400">Loading…</span>
+              : <Button variant="ghost" onClick={() => { setDepartmentId(''); setEmployeeId('') }}>Reset filters</Button>}
           </div>
-        </form>
+        </div>
       </Card>
 
       {error && <ErrorText>{error}</ErrorText>}
-      {loading && <p className="text-slate-500">Loading…</p>}
 
-      {data && !loading && (
+      {data && (
         <Card className="overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
@@ -189,7 +230,7 @@ export default function Attendance() {
                     </button>
                     <button
                       onClick={() => toggleHoliday(d)}
-                      disabled={busyDay === d.dateIso || d.holidayName === 'Weekly off'}
+                      disabled={d.holidayName === 'Weekly off'}
                       className="mt-1 text-[10px] text-slate-400 hover:text-sky-600 disabled:opacity-40"
                       title={d.holidayName === 'Weekly off' ? 'Weekly off (fixed)' : d.isHoliday ? 'Unmark holiday' : 'Mark as holiday'}
                     >

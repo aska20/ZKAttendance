@@ -1,46 +1,45 @@
 import { useEffect, useMemo, useState } from 'react'
-import {
-  listEmployees,
-  listDepartments,
-  createEmployee,
-  updateEmployee,
-  deactivateEmployee,
-} from '../api/employees'
-import { employees as employeesApi } from '../api/resources'
+import { employees as api, departments as deptApi } from '../api/resources'
 import { apiErrorMessage } from '../lib/errors'
+import { useAuth } from '../context/AuthContext'
+import { PageHeader, Card, Button, Table, Modal, Field, Input, Select, Badge, ErrorText } from '../components/ui'
+import { useFeedback } from '../components/feedback'
 
 const emptyForm = {
-  employeeName: '',
-  biometricUserId: '',
-  departmentId: '',
-  phoneNumber: '',
-  title: '',
-  hireDate: '',
-  isActive: true,
+  employeeName: '', biometricUserId: '', departmentId: '',
+  phoneNumber: '', title: '', email: '', hireDate: '', isActive: true,
 }
 
-function toPayload(form) {
+function toPayload(f) {
   return {
-    employeeName: form.employeeName.trim(),
-    biometricUserId: form.biometricUserId.trim() || null,
-    departmentId: form.departmentId ? Number(form.departmentId) : null,
-    phoneNumber: form.phoneNumber.trim() || null,
-    title: form.title.trim() || null,
-    hireDate: form.hireDate || null,
-    isActive: form.isActive,
+    employeeName: f.employeeName.trim(),
+    biometricUserId: f.biometricUserId.trim() || null,
+    departmentId: f.departmentId ? Number(f.departmentId) : null,
+    phoneNumber: f.phoneNumber.trim() || null,
+    title: f.title.trim() || null,
+    email: f.email.trim() || null,
+    hireDate: f.hireDate || null,
+    isActive: f.isActive,
   }
 }
 
 export default function Employees() {
+  const fb = useFeedback()
+  const { isAdmin } = useAuth()
+
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const [editing, setEditing] = useState(null) // employee object, or {} for new, or null
+  const [editing, setEditing] = useState(null)
   const [form, setForm] = useState(emptyForm)
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
+
+  const [loginFor, setLoginFor] = useState(null)
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' })
+  const [loginError, setLoginError] = useState('')
 
   const deptName = useMemo(() => {
     const map = new Map(departments.map((d) => [d.departmentId, d.departmentName]))
@@ -48,10 +47,9 @@ export default function Employees() {
   }, [departments])
 
   async function refresh() {
-    setLoading(true)
-    setError('')
+    setLoading(true); setError('')
     try {
-      const [emps, depts] = await Promise.all([listEmployees(), listDepartments()])
+      const [emps, depts] = await Promise.all([api.list(), deptApi.list()])
       setEmployees(emps)
       setDepartments(depts)
     } catch (err) {
@@ -60,47 +58,33 @@ export default function Employees() {
       setLoading(false)
     }
   }
+  useEffect(() => { refresh() }, [])
 
-  useEffect(() => {
-    refresh()
-  }, [])
-
-  function openCreate() {
-    setEditing({})
-    setForm(emptyForm)
-    setFormError('')
-  }
-
+  function openCreate() { setEditing({}); setForm(emptyForm); setFormError('') }
   function openEdit(emp) {
     setEditing(emp)
     setForm({
-      employeeName: emp.employeeName || '',
-      biometricUserId: emp.biometricUserId || '',
+      employeeName: emp.employeeName || '', biometricUserId: emp.biometricUserId || '',
       departmentId: emp.departmentId ? String(emp.departmentId) : '',
-      phoneNumber: emp.phoneNumber || '',
-      title: emp.title || '',
-      hireDate: emp.hireDate ? emp.hireDate.slice(0, 10) : '',
-      isActive: emp.isActive,
+      phoneNumber: emp.phoneNumber || '', title: emp.title || '', email: emp.email || '',
+      hireDate: emp.hireDate ? emp.hireDate.slice(0, 10) : '', isActive: emp.isActive,
     })
     setFormError('')
   }
 
-  function closeForm() {
-    setEditing(null)
-  }
-
-  async function onSubmit(e) {
+  async function save(e) {
     e.preventDefault()
-    setSaving(true)
-    setFormError('')
+    setSaving(true); setFormError('')
     try {
       if (editing.employeeId) {
-        await updateEmployee(editing.employeeId, toPayload(form))
+        await api.update(editing.employeeId, toPayload(form))
+        fb.success('Employee updated')
       } else {
-        await createEmployee(toPayload(form))
+        await api.create(toPayload(form))
+        fb.success(isAdmin ? 'Employee added' : 'Sent to an admin for approval')
       }
-      closeForm()
-      await refresh()
+      setEditing(null)
+      refresh()
     } catch (err) {
       setFormError(apiErrorMessage(err, 'Could not save the employee'))
     } finally {
@@ -109,229 +93,146 @@ export default function Employees() {
   }
 
   async function onDeactivate(emp) {
-    if (!confirm(`Deactivate ${emp.employeeName}?`)) return
-    try {
-      await deactivateEmployee(emp.employeeId)
-      await refresh()
-    } catch (err) {
-      setError(apiErrorMessage(err))
-    }
+    const ok = await fb.confirm({ title: 'Deactivate employee', message: `Deactivate ${emp.employeeName}? Their history is kept.`, confirmText: 'Deactivate' })
+    if (!ok) return
+    try { await api.deactivate(emp.employeeId); fb.success('Deactivated'); refresh() }
+    catch (err) { fb.error(apiErrorMessage(err)) }
   }
 
   async function onDelete(emp) {
-    if (!confirm(`Permanently delete ${emp.employeeName}? This only works if they have no attendance records.`)) return
+    const ok = await fb.confirm({
+      title: 'Delete employee',
+      message: `Permanently delete ${emp.employeeName}? Only works if they have no attendance records.`,
+      confirmText: 'Delete', danger: true,
+    })
+    if (!ok) return
+    try { await api.remove(emp.employeeId); fb.success('Deleted'); refresh() }
+    catch (err) { fb.error(apiErrorMessage(err)) }
+  }
+
+  function openLogin(emp) {
+    setLoginFor(emp)
+    setLoginForm({ username: (emp.email || emp.employeeName || '').split('@')[0].toLowerCase().replace(/\s+/g, ''), password: '' })
+    setLoginError('')
+  }
+  async function saveLogin(e) {
+    e.preventDefault()
+    setLoginError('')
     try {
-      await employeesApi.remove(emp.employeeId)
-      await refresh()
+      await api.createLogin(loginFor.employeeId, { username: loginForm.username.trim(), password: loginForm.password, email: loginFor.email })
+      fb.success(`Login "${loginForm.username}" created for ${loginFor.employeeName}`)
+      setLoginFor(null)
+      refresh()
     } catch (err) {
-      // 400 = has history → fall back to deactivate
-      setError(apiErrorMessage(err))
+      setLoginError(apiErrorMessage(err, 'Could not create the login'))
     }
   }
 
+  const statusBadge = (emp) => {
+    if (emp.approvalStatus === 'Pending') return <Badge tone="amber">Pending approval</Badge>
+    if (emp.approvalStatus === 'Rejected') return <Badge tone="red">Rejected</Badge>
+    return <Badge tone={emp.isActive ? 'green' : 'slate'}>{emp.isActive ? 'Active' : 'Inactive'}</Badge>
+  }
+
+  const columns = [
+    { key: 'id', header: 'ID', render: (r) => <span className="text-slate-400 tabular-nums">{r.employeeId}</span> },
+    { key: 'name', header: 'Name', render: (r) => <span className="font-medium text-slate-800">{r.employeeName}</span> },
+    { key: 'bio', header: 'Biometric ID', render: (r) => r.biometricUserId },
+    { key: 'dept', header: 'Department', render: (r) => deptName(r.departmentId) },
+    { key: 'title', header: 'Title', render: (r) => r.title || '—' },
+    { key: 'login', header: 'Login', render: (r) => r.hasLogin ? <Badge tone="sky">Yes</Badge> : <span className="text-slate-300">—</span> },
+    { key: 'status', header: 'Status', render: statusBadge },
+    {
+      key: 'actions', header: '', render: (r) => (
+        <div className="text-right whitespace-nowrap text-xs">
+          <button onClick={() => openEdit(r)} className="text-sky-600 hover:underline">Edit</button>
+          {!r.hasLogin && r.approvalStatus === 'Approved' && (
+            <button onClick={() => openLogin(r)} className="ml-3 text-sky-600 hover:underline">Give login</button>
+          )}
+          {r.isActive && (
+            <button onClick={() => onDeactivate(r)} className="ml-3 text-amber-600 hover:underline">Deactivate</button>
+          )}
+          <button onClick={() => onDelete(r)} className="ml-3 text-red-600 hover:underline">Delete</button>
+        </div>
+      ),
+    },
+  ]
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-slate-900">Employees</h1>
-        <button
-          onClick={openCreate}
-          className="rounded-md bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700"
-        >
-          New employee
-        </button>
-      </div>
+    <div>
+      <PageHeader title="Employees" actions={<Button onClick={openCreate}>New employee</Button>} />
 
-      {error && <p className="text-red-600">{error}</p>}
+      {!isAdmin && (
+        <Card className="mb-4 p-3 text-sm text-amber-800 ring-amber-200">
+          Employees you add are sent to an admin for approval before they become active.
+        </Card>
+      )}
+      {error && <ErrorText>{error}</ErrorText>}
 
-      <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-slate-200">
-        <table className="w-full text-sm">
-          <thead className="text-left text-slate-500">
-            <tr className="border-b border-slate-100">
-              <th className="px-5 py-2 font-medium">ID</th>
-              <th className="px-5 py-2 font-medium">Name</th>
-              <th className="px-5 py-2 font-medium">Biometric ID</th>
-              <th className="px-5 py-2 font-medium">Department</th>
-              <th className="px-5 py-2 font-medium">Title</th>
-              <th className="px-5 py-2 font-medium">Status</th>
-              <th className="px-5 py-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={7} className="px-5 py-4 text-slate-500">
-                  Loading…
-                </td>
-              </tr>
-            ) : employees.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="px-5 py-4 text-slate-500">
-                  No employees yet.
-                </td>
-              </tr>
-            ) : (
-              employees.map((emp) => (
-                <tr key={emp.employeeId} className="border-b border-slate-50 last:border-0">
-                  <td className="px-5 py-2 text-slate-400 tabular-nums">{emp.employeeId}</td>
-                  <td className="px-5 py-2 font-medium text-slate-800">{emp.employeeName}</td>
-                  <td className="px-5 py-2">{emp.biometricUserId}</td>
-                  <td className="px-5 py-2">{deptName(emp.departmentId)}</td>
-                  <td className="px-5 py-2">{emp.title || '—'}</td>
-                  <td className="px-5 py-2">
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        emp.isActive
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-slate-100 text-slate-500'
-                      }`}
-                    >
-                      {emp.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                  </td>
-                  <td className="px-5 py-2 text-right whitespace-nowrap">
-                    <button
-                      onClick={() => openEdit(emp)}
-                      className="text-sky-600 hover:underline"
-                    >
-                      Edit
-                    </button>
-                    {emp.isActive && (
-                      <button
-                        onClick={() => onDeactivate(emp)}
-                        className="ml-3 text-amber-600 hover:underline"
-                      >
-                        Deactivate
-                      </button>
-                    )}
-                    <button
-                      onClick={() => onDelete(emp)}
-                      className="ml-3 text-red-600 hover:underline"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      <Table
+        columns={columns}
+        rows={employees.map((r) => ({ ...r, _key: r.employeeId }))}
+        loading={loading}
+        empty="No employees yet."
+      />
 
       {editing && (
-        <div className="fixed inset-0 z-10 flex items-center justify-center bg-slate-900/40 p-4">
-          <form
-            onSubmit={onSubmit}
-            className="w-full max-w-md space-y-4 rounded-xl bg-white p-6 shadow-lg"
-          >
-            <h2 className="text-lg font-semibold text-slate-900">
-              {editing.employeeId ? 'Edit employee' : 'New employee'}
-            </h2>
-
-            {formError && (
-              <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200">
-                {formError}
-              </div>
-            )}
-
+        <Modal title={editing.employeeId ? 'Edit employee' : 'New employee'} onClose={() => setEditing(null)}>
+          <form onSubmit={save} className="space-y-4">
+            <ErrorText>{formError}</ErrorText>
             <Field label="Name" required>
-              <input
-                value={form.employeeName}
-                onChange={(e) => setForm({ ...form, employeeName: e.target.value })}
-                required
-                className="input"
-              />
+              <Input value={form.employeeName} onChange={(e) => setForm({ ...form, employeeName: e.target.value })} required />
             </Field>
-
-            <Field label="Biometric ID" hint="Leave blank to auto-assign the next free number">
-              <input
-                value={form.biometricUserId}
-                onChange={(e) => setForm({ ...form, biometricUserId: e.target.value })}
-                className="input"
-              />
+            <Field label="Biometric ID" hint="The number the ZKTeco device knows them by. Blank = auto-assign.">
+              <Input value={form.biometricUserId} onChange={(e) => setForm({ ...form, biometricUserId: e.target.value })} />
             </Field>
-
             <Field label="Department">
-              <select
-                value={form.departmentId}
-                onChange={(e) => setForm({ ...form, departmentId: e.target.value })}
-                className="input"
-              >
-                <option value="">—</option>
-                {departments.map((d) => (
-                  <option key={d.departmentId} value={d.departmentId}>
-                    {d.departmentName}
-                  </option>
-                ))}
-              </select>
+              <Select value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })}>
+                <option value="">None</option>
+                {departments.map((d) => <option key={d.departmentId} value={d.departmentId}>{d.departmentName}</option>)}
+              </Select>
             </Field>
-
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Title">
-                <input
-                  value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  className="input"
-                />
-              </Field>
-              <Field label="Phone">
-                <input
-                  value={form.phoneNumber}
-                  onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })}
-                  className="input"
-                />
-              </Field>
+              <Field label="Title"><Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
+              <Field label="Phone"><Input value={form.phoneNumber} onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })} /></Field>
             </div>
-
-            <Field label="Hire date (AD)">
-              <input
-                type="date"
-                value={form.hireDate}
-                onChange={(e) => setForm({ ...form, hireDate: e.target.value })}
-                className="input"
-              />
-            </Field>
-
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Email"><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></Field>
+              <Field label="Hire date (AD)"><Input type="date" value={form.hireDate} onChange={(e) => setForm({ ...form, hireDate: e.target.value })} /></Field>
+            </div>
             <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                checked={form.isActive}
-                onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
-              />
+              <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
               Active
             </label>
-
             <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={closeForm}
-                className="rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="rounded-md bg-sky-600 px-3 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:opacity-60"
-              >
-                {saving ? 'Saving…' : 'Save'}
-              </button>
+              <Button type="button" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
+              <Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
             </div>
           </form>
-        </div>
+        </Modal>
+      )}
+
+      {loginFor && (
+        <Modal title={`Login for ${loginFor.employeeName}`} onClose={() => setLoginFor(null)}>
+          <form onSubmit={saveLogin} className="space-y-4">
+            <p className="text-sm text-slate-500">
+              Creates an <b>Employee</b> role account linked to this person. They will be able to
+              sign in and see only their own attendance.
+            </p>
+            <ErrorText>{loginError}</ErrorText>
+            <Field label="Username" required>
+              <Input value={loginForm.username} onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })} required minLength={3} />
+            </Field>
+            <Field label="Password" required hint="At least 8 characters">
+              <Input type="password" value={loginForm.password} onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} required minLength={8} />
+            </Field>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setLoginFor(null)}>Cancel</Button>
+              <Button type="submit">Create login</Button>
+            </div>
+          </form>
+        </Modal>
       )}
     </div>
-  )
-}
-
-function Field({ label, hint, required, children }) {
-  return (
-    <label className="block text-sm">
-      <span className="mb-1 block font-medium text-slate-700">
-        {label}
-        {required && <span className="text-red-500"> *</span>}
-      </span>
-      {children}
-      {hint && <span className="mt-1 block text-xs text-slate-400">{hint}</span>}
-    </label>
   )
 }

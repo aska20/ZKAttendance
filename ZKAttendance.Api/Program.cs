@@ -99,6 +99,9 @@ builder.Services.AddScoped<ITokenService, JwtTokenService>();
 // Keeps a login account (ApiUser) and its Employee record pointing at one person.
 builder.Services.AddScoped<EmployeeAccountLinker>();
 
+// In-app notifications (bell menu).
+builder.Services.AddScoped<ZKAttendance.Api.Services.Notifier>();
+
 // ═══════════════════════════════════════════════════════
 // Background services
 // ═══════════════════════════════════════════════════════
