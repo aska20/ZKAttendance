@@ -16,18 +16,15 @@ namespace ZKAttendance.Infrastructure.Security
         private readonly AttendanceDbContext _context;
         private readonly IConfiguration _config;
         private readonly ILogger<JwtTokenService> _logger;
-        private readonly EmployeeAccountLinker _linker;
 
         public JwtTokenService(
             AttendanceDbContext context,
             IConfiguration config,
-            ILogger<JwtTokenService> logger,
-            EmployeeAccountLinker linker)
+            ILogger<JwtTokenService> logger)
         {
             _context = context;
             _config = config;
             _logger = logger;
-            _linker = linker;
         }
 
         private string Key => _config["JwtSettings:Key"]
@@ -37,44 +34,6 @@ namespace ZKAttendance.Infrastructure.Security
         private int AccessMinutes => int.TryParse(_config["JwtSettings:AccessTokenMinutes"], out var m) ? m : 60;
         private int RefreshDays => int.TryParse(_config["JwtSettings:RefreshTokenDays"], out var d) ? d : 7;
 
-        public async Task<AuthResponse> RegisterAsync(RegisterRequest request, CancellationToken ct = default)
-        {
-            var username = request.Username.Trim();
-
-            if (await _context.ApiUsers.AnyAsync(u => u.Username == username, ct))
-                throw new InvalidOperationException($"Username '{username}' is already taken");
-
-            if (await _context.ApiUsers.AnyAsync(u => u.Email == request.Email, ct))
-                throw new InvalidOperationException($"Email '{request.Email}' is already registered");
-
-            var allowed = new[] { "Admin", "HR", "Employee" };
-            var role = allowed.FirstOrDefault(r =>
-                r.Equals(request.Role, StringComparison.OrdinalIgnoreCase)) ?? "Employee";
-
-            var (hash, salt) = PasswordHasher.HashPassword(request.Password);
-
-            var user = new ApiUser
-            {
-                Username = username,
-                Email = request.Email.Trim(),
-                PasswordHash = hash,
-                PasswordSalt = salt,
-                Role = role,
-                EmployeeId = await _linker.ResolveEmployeeIdAsync(
-                    request.Email, request.BiometricUserId, ct),
-                IsActive = true,
-                CreatedDate = DateTime.Now
-            };
-
-            _context.ApiUsers.Add(user);
-            await _context.SaveChangesAsync(ct);
-
-            _logger.LogInformation(
-                "API user {Username} registered with role {Role} (employee link: {EmployeeId})",
-                username, role, user.EmployeeId);
-
-            return await IssueAsync(user, ct);
-        }
 
         public async Task<AuthResponse?> LoginAsync(LoginRequest request, CancellationToken ct = default)
         {

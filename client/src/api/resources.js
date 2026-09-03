@@ -73,6 +73,7 @@ export const attendance = {
 // ── Overview (pivot) ─────────────────────────────────────────
 export const overview = {
   get: (params) => get('/Overview', params),
+  summary: (params) => get('/Overview/summary', params),
 }
 
 // ── Holidays ─────────────────────────────────────────────────
@@ -104,7 +105,9 @@ export const account = {
 }
 
 export const users = {
-  register: (b) => post('/Auth/register', b),
+  list: () => get('/Users'),
+  setActive: (id, active) => post(`/Users/${id}/set-active?active=${active}`),
+  setRole: (id, role) => post(`/Users/${id}/set-role?role=${role}`),
 }
 
 // ── Dashboard ────────────────────────────────────────────────

@@ -30,11 +30,11 @@ export function FeedbackProvider({ children }) {
         setDialog({ kind: 'confirm', confirmText: 'Confirm', ...opts })
       }),
 
-    // promptText({ title, label, defaultValue }) -> Promise<string | null>
+    // promptText({ title, label, defaultValue, confirmText }) -> Promise<string | null>
     promptText: (opts) =>
       new Promise((resolve) => {
         resolver.current = resolve
-        setDialog({ kind: 'prompt', value: opts.defaultValue ?? '', ...opts })
+        setDialog({ kind: 'prompt', confirmText: 'Save', value: opts.defaultValue ?? '', ...opts })
       }),
   }
 

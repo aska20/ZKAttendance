@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
-import { employees as api, departments as deptApi } from '../api/resources'
+import { employees as api, departments as deptApi, users as usersApi } from '../api/resources'
 import { apiErrorMessage } from '../lib/errors'
 import { useAuth } from '../context/AuthContext'
 import { PageHeader, Card, Button, Table, Modal, Field, Input, Select, Badge, ErrorText } from '../components/ui'
 import { useFeedback } from '../components/feedback'
+import EmployeeCalendarModal from '../components/EmployeeCalendarModal'
 
 const emptyForm = {
   employeeName: '', biometricUserId: '', departmentId: '',
   phoneNumber: '', title: '', email: '', hireDate: '', isActive: true,
+  linkDeviceIds: [],
 }
 
 function toPayload(f) {
@@ -20,6 +22,7 @@ function toPayload(f) {
     email: f.email.trim() || null,
     hireDate: f.hireDate || null,
     isActive: f.isActive,
+    linkDeviceIds: f.linkDeviceIds?.length ? f.linkDeviceIds : null,
   }
 }
 
@@ -29,6 +32,7 @@ export default function Employees() {
 
   const [employees, setEmployees] = useState([])
   const [departments, setDepartments] = useState([])
+  const [unregistered, setUnregistered] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -40,6 +44,7 @@ export default function Employees() {
   const [loginFor, setLoginFor] = useState(null)
   const [loginForm, setLoginForm] = useState({ username: '', password: '' })
   const [loginError, setLoginError] = useState('')
+  const [calendarFor, setCalendarFor] = useState(null)
 
   const deptName = useMemo(() => {
     const map = new Map(departments.map((d) => [d.departmentId, d.departmentName]))
@@ -49,9 +54,10 @@ export default function Employees() {
   async function refresh() {
     setLoading(true); setError('')
     try {
-      const [emps, depts] = await Promise.all([api.list(), deptApi.list()])
+      const [emps, depts, unreg] = await Promise.all([api.list(), deptApi.list(), api.unregistered()])
       setEmployees(emps)
       setDepartments(depts)
+      setUnregistered(unreg)
     } catch (err) {
       setError(apiErrorMessage(err))
     } finally {
@@ -60,7 +66,9 @@ export default function Employees() {
   }
   useEffect(() => { refresh() }, [])
 
-  function openCreate() { setEditing({}); setForm(emptyForm); setFormError('') }
+  function openCreate(biometricUserId = '', linkDeviceIds = []) {
+    setEditing({}); setForm({ ...emptyForm, biometricUserId, linkDeviceIds }); setFormError('')
+  }
   function openEdit(emp) {
     setEditing(emp)
     setForm({
@@ -112,15 +120,25 @@ export default function Employees() {
 
   function openLogin(emp) {
     setLoginFor(emp)
-    setLoginForm({ username: (emp.email || emp.employeeName || '').split('@')[0].toLowerCase().replace(/\s+/g, ''), password: '' })
+    setLoginForm({
+      username: (emp.email || emp.employeeName || '').split('@')[0].toLowerCase().replace(/\s+/g, ''),
+      password: '',
+      role: 'Employee',
+    })
     setLoginError('')
   }
   async function saveLogin(e) {
     e.preventDefault()
     setLoginError('')
     try {
-      await api.createLogin(loginFor.employeeId, { username: loginForm.username.trim(), password: loginForm.password, email: loginFor.email })
-      fb.success(`Login "${loginForm.username}" created for ${loginFor.employeeName}`)
+      const res = await api.createLogin(loginFor.employeeId, {
+        username: loginForm.username.trim(),
+        password: loginForm.password,
+        role: loginForm.role,
+      })
+      fb.success(res.adopted
+        ? `Linked existing account "${res.username}" to ${loginFor.employeeName}`
+        : `Login "${loginForm.username}" (${loginForm.role}) created for ${loginFor.employeeName}`)
       setLoginFor(null)
       refresh()
     } catch (err) {
@@ -134,21 +152,59 @@ export default function Employees() {
     return <Badge tone={emp.isActive ? 'green' : 'slate'}>{emp.isActive ? 'Active' : 'Inactive'}</Badge>
   }
 
+  async function toggleLoginActive(r) {
+    try {
+      await usersApi.setActive(r.login.userId, !r.login.active)
+      fb.success(r.login.active ? 'Login disabled' : 'Login enabled')
+      refresh()
+    } catch (err) { fb.error(apiErrorMessage(err)) }
+  }
+  async function changeLoginRole(r, role) {
+    try {
+      await usersApi.setRole(r.login.userId, role)
+      fb.success(`Role set to ${role}`)
+      refresh()
+    } catch (err) { fb.error(apiErrorMessage(err)) }
+  }
+
   const columns = [
     { key: 'id', header: 'ID', render: (r) => <span className="text-slate-400 tabular-nums">{r.employeeId}</span> },
     { key: 'name', header: 'Name', render: (r) => <span className="font-medium text-slate-800">{r.employeeName}</span> },
     { key: 'bio', header: 'Biometric ID', render: (r) => r.biometricUserId },
     { key: 'dept', header: 'Department', render: (r) => deptName(r.departmentId) },
-    { key: 'title', header: 'Title', render: (r) => r.title || '—' },
-    { key: 'login', header: 'Login', render: (r) => r.hasLogin ? <Badge tone="sky">Yes</Badge> : <span className="text-slate-300">—</span> },
     { key: 'status', header: 'Status', render: statusBadge },
+    {
+      key: 'login', header: 'Login', render: (r) => {
+        if (!r.login) {
+          return (r.approvalStatus === 'Pending' || r.approvalStatus === 'Rejected')
+            ? <span className="text-slate-300">—</span>
+            : <button onClick={() => openLogin(r)} className="text-sky-600 hover:underline">Give login</button>
+        }
+        return (
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-slate-700">{r.login.username}</span>
+            <select
+              value={r.login.role}
+              onChange={(e) => changeLoginRole(r, e.target.value)}
+              className="rounded border border-slate-200 bg-white px-1 py-0.5 text-xs"
+            >
+              <option>Employee</option><option>HR</option><option>Admin</option>
+            </select>
+            <button
+              onClick={() => toggleLoginActive(r)}
+              className={`text-xs ${r.login.active ? 'text-amber-600' : 'text-green-600'} hover:underline`}
+            >
+              {r.login.active ? 'disable' : 'enable'}
+            </button>
+          </div>
+        )
+      },
+    },
     {
       key: 'actions', header: '', render: (r) => (
         <div className="text-right whitespace-nowrap text-xs">
-          <button onClick={() => openEdit(r)} className="text-sky-600 hover:underline">Edit</button>
-          {!r.hasLogin && r.approvalStatus === 'Approved' && (
-            <button onClick={() => openLogin(r)} className="ml-3 text-sky-600 hover:underline">Give login</button>
-          )}
+          <button onClick={() => setCalendarFor(r)} className="text-sky-600 hover:underline">Calendar</button>
+          <button onClick={() => openEdit(r)} className="ml-3 text-sky-600 hover:underline">Edit</button>
           {r.isActive && (
             <button onClick={() => onDeactivate(r)} className="ml-3 text-amber-600 hover:underline">Deactivate</button>
           )}
@@ -160,13 +216,34 @@ export default function Employees() {
 
   return (
     <div>
-      <PageHeader title="Employees" actions={<Button onClick={openCreate}>New employee</Button>} />
+      <PageHeader title="Employees" actions={<Button onClick={() => openCreate()}>New employee</Button>} />
 
       {!isAdmin && (
         <Card className="mb-4 p-3 text-sm text-amber-800 ring-amber-200">
           Employees you add are sent to an admin for approval before they become active.
         </Card>
       )}
+
+      {unregistered.length > 0 && (
+        <Card className="mb-4 border-l-4 border-l-amber-400 p-4">
+          <div className="text-sm font-medium text-slate-800">
+            {unregistered.length} biometric ID{unregistered.length > 1 ? 's have' : ' has'} punched from a device but {unregistered.length > 1 ? 'are' : 'is'} not added here
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {unregistered.map((u) => (
+              <button
+                key={u.biometricUserId}
+                onClick={() => openCreate(u.biometricUserId, u.deviceIds)}
+                className="rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100"
+                title={`${u.punchCount} punch(es)`}
+              >
+                + Add {u.biometricUserId}
+              </button>
+            ))}
+          </div>
+        </Card>
+      )}
+
       {error && <ErrorText>{error}</ErrorText>}
 
       <Table
@@ -180,11 +257,17 @@ export default function Employees() {
         <Modal title={editing.employeeId ? 'Edit employee' : 'New employee'} onClose={() => setEditing(null)}>
           <form onSubmit={save} className="space-y-4">
             <ErrorText>{formError}</ErrorText>
+            {form.linkDeviceIds?.length > 0 && (
+              <div className="rounded-md bg-sky-50 px-3 py-2 text-xs text-sky-800 ring-1 ring-sky-200">
+                Completing biometric ID <b>{form.biometricUserId}</b> — it will be linked to
+                {' '}{form.linkDeviceIds.length} device{form.linkDeviceIds.length > 1 ? 's' : ''} so past and future punches attribute to this person.
+              </div>
+            )}
             <Field label="Name" required>
               <Input value={form.employeeName} onChange={(e) => setForm({ ...form, employeeName: e.target.value })} required />
             </Field>
             <Field label="Biometric ID" hint="The number the ZKTeco device knows them by. Blank = auto-assign.">
-              <Input value={form.biometricUserId} onChange={(e) => setForm({ ...form, biometricUserId: e.target.value })} />
+              <Input value={form.biometricUserId} onChange={(e) => setForm({ ...form, biometricUserId: e.target.value })} readOnly={form.linkDeviceIds?.length > 0} />
             </Field>
             <Field label="Department">
               <Select value={form.departmentId} onChange={(e) => setForm({ ...form, departmentId: e.target.value })}>
@@ -216,8 +299,7 @@ export default function Employees() {
         <Modal title={`Login for ${loginFor.employeeName}`} onClose={() => setLoginFor(null)}>
           <form onSubmit={saveLogin} className="space-y-4">
             <p className="text-sm text-slate-500">
-              Creates an <b>Employee</b> role account linked to this person. They will be able to
-              sign in and see only their own attendance.
+              Creates a login account linked 1:1 to this person.
             </p>
             <ErrorText>{loginError}</ErrorText>
             <Field label="Username" required>
@@ -226,12 +308,27 @@ export default function Employees() {
             <Field label="Password" required hint="At least 8 characters">
               <Input type="password" value={loginForm.password} onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })} required minLength={8} />
             </Field>
+            <Field label="Role" hint="Employee = sees only their own attendance. HR / Admin = manages the system.">
+              <Select value={loginForm.role} onChange={(e) => setLoginForm({ ...loginForm, role: e.target.value })}>
+                <option value="Employee">Employee</option>
+                <option value="HR">HR</option>
+                <option value="Admin">Admin</option>
+              </Select>
+            </Field>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="ghost" onClick={() => setLoginFor(null)}>Cancel</Button>
               <Button type="submit">Create login</Button>
             </div>
           </form>
         </Modal>
+      )}
+
+      {calendarFor && (
+        <EmployeeCalendarModal
+          employeeId={calendarFor.employeeId}
+          employeeName={calendarFor.employeeName}
+          onClose={() => setCalendarFor(null)}
+        />
       )}
     </div>
   )

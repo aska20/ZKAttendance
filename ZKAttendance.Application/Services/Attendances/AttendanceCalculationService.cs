@@ -11,8 +11,6 @@ namespace ZKAttendance.Application.Services.Attendances
 
     public class AttendanceCalculationService
     {
-        private readonly IShiftAssignmentService _shiftService;
-
         // Injected as a PORT, not called as an extension method on DateTime.
         //
         // The converter itself lives in Infrastructure, because it is an
@@ -22,16 +20,13 @@ namespace ZKAttendance.Application.Services.Attendances
         // Clean Architecture exists to prevent.
         private readonly INepaliCalendar _nepali;
 
-        public AttendanceCalculationService(
-            IShiftAssignmentService shiftService,
-            INepaliCalendar nepali)
+        public AttendanceCalculationService(INepaliCalendar nepali)
         {
-            _shiftService = shiftService;
             _nepali = nepali;
         }
 
         /// <param name="employees">Keyed by EmployeeId, not by biometric ID.</param>
-        public async Task<List<AttendanceViewModel>> BuildAttendanceViewModels(
+        public Task<List<AttendanceViewModel>> BuildAttendanceViewModels(
             List<AttendanceLog> logs,
             Dictionary<int, Employee> employees,
             Dictionary<int, string> branches,
@@ -68,9 +63,6 @@ namespace ZKAttendance.Application.Services.Attendances
                     ? group.Logs.OrderByDescending(x => x.AttendanceTime).FirstOrDefault()
                     : null;
 
-                var shift = await _shiftService.GetEmployeeShiftForDate(emp.EmployeeId, group.Date)
-                    ?? emp.DefaultShift;
-
                 double workingHours = CalculateWorkingHours(checkIn, checkOut);
                 var status = GetAttendanceStatus(checkIn, checkOut, workingHours);
 
@@ -100,11 +92,10 @@ namespace ZKAttendance.Application.Services.Attendances
                                     && checkIn.DeviceId != checkOut.DeviceId,
                     WorkingHours = workingHours,
                     Status = status,
-                    ShiftName = shift?.ShiftName ?? "-"
                 });
             }
 
-            return viewModels;
+            return Task.FromResult(viewModels);
         }
 
         private double CalculateWorkingHours(AttendanceLog? checkIn, AttendanceLog? checkOut)

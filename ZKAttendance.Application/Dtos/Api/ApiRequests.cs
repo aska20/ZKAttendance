@@ -27,45 +27,6 @@ namespace ZKAttendance.Application.Dtos.Api
         public bool IsActive { get; set; } = true;
     }
 
-    // ── Work shifts ────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Times are "HH:mm" or "HH:mm:ss" strings — they bind to TimeSpan.
-    /// Everything except the two required times has a sensible default that
-    /// matches the WorkShift entity.
-    /// </summary>
-    public class WorkShiftRequest
-    {
-        [Required, StringLength(100)]
-        public string ShiftName { get; set; } = string.Empty;
-
-        public string? Description { get; set; }
-
-        [Required]
-        public TimeSpan StartTime { get; set; }
-
-        [Required]
-        public TimeSpan EndTime { get; set; }
-
-        public int LateMinutes { get; set; } = 15;
-        public int EarlyMinutes { get; set; } = 15;
-        public int BreakMinutes { get; set; } = 0;
-        public bool IsBreakPaid { get; set; } = true;
-        public int WorkMinutes { get; set; } = 480;
-        public bool RequireCheckIn { get; set; } = true;
-        public bool RequireCheckOut { get; set; } = true;
-        public bool IsOvernight { get; set; } = false;
-        public int OvertimeStartMinutes { get; set; } = 30;
-        public double MinHoursForFullDay { get; set; } = 4.0;
-        public double MaxRegularHours { get; set; } = 10.0;
-        public int RoundingMinutes { get; set; } = 0;
-
-        /// <summary>Comma-separated weekday numbers, e.g. "0,1,2,3,4,6" (Sun-Thu + Sat).</summary>
-        public string? WorkDays { get; set; }
-
-        public bool IsActive { get; set; } = true;
-    }
-
     // ── Account ────────────────────────────────────────────────────────
 
     public class ChangePasswordRequest
@@ -141,6 +102,14 @@ namespace ZKAttendance.Application.Dtos.Api
         public bool CheckHoliday { get; set; } = true;
 
         public bool IsActive { get; set; } = true;
+
+        /// <summary>
+        /// Devices this person is already enrolled on. When set, an
+        /// EmployeeDevice link is created for each so their punches attribute
+        /// immediately. Used when completing an employee from an unregistered
+        /// biometric id.
+        /// </summary>
+        public List<int>? LinkDeviceIds { get; set; }
     }
 
     /// <summary>Body for POST /api/Employees/{id}/enroll-on-devices.</summary>
@@ -220,28 +189,6 @@ namespace ZKAttendance.Application.Dtos.Api
 
     // ── Auth ───────────────────────────────────────────────────────────
 
-    public class RegisterRequest
-    {
-        [Required, StringLength(50)]
-        public string Username { get; set; } = string.Empty;
-
-        [Required, EmailAddress, StringLength(150)]
-        public string Email { get; set; } = string.Empty;
-
-        [Required, StringLength(100, MinimumLength = 8)]
-        public string Password { get; set; } = string.Empty;
-
-        /// <summary>"Admin", "HR" or "Employee". Defaults to Employee.</summary>
-        public string Role { get; set; } = "Employee";
-
-        /// <summary>
-        /// Optional. The employee's biometric/enrol number. When supplied (or
-        /// when the email matches an existing employee) the new account is
-        /// linked to that Employee record instead of standing alone.
-        /// </summary>
-        [StringLength(12)]
-        public string? BiometricUserId { get; set; }
-    }
 
     public class LoginRequest
     {

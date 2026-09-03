@@ -7,10 +7,11 @@ const managerNav = [
   { to: '/attendance', label: 'Attendance' },
   { to: '/employees', label: 'Employees' },
   { to: '/departments', label: 'Departments' },
-  { to: '/unregistered', label: 'Unregistered IDs' },
   { to: '/branches', label: 'Branches' },
   { to: '/devices', label: 'Devices' },
+  { to: '/holidays', label: 'Holidays' },
   { to: '/reports/daily', label: 'Daily Report' },
+  { to: '/reports/summary', label: 'Summary Report' },
   { to: '/errors', label: 'Error Log' },
 ]
 
@@ -38,7 +39,6 @@ export default function Layout() {
             <>
               <div className="my-2 border-t border-slate-800" />
               <NavItem to="/employees/pending" label="Pending Approvals" />
-              <NavItem to="/users/new" label="Register User" />
             </>
           )}
           <div className="my-2 border-t border-slate-800" />

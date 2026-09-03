@@ -146,6 +146,7 @@ namespace ZKAttendance.Api.Controllers
     public class EmployeesApiController : ControllerBase
     {
         private readonly IEmployeeService _employees;
+        private readonly IEmployeeDeviceEnrollment _enrollment;
         private readonly INepaliCalendar _nepali;
         private readonly ZKAttendance.Infrastructure.Persistence.AttendanceDbContext _db;
         private readonly Notifier _notifier;
@@ -153,12 +154,14 @@ namespace ZKAttendance.Api.Controllers
 
         public EmployeesApiController(
             IEmployeeService employees,
+            IEmployeeDeviceEnrollment enrollment,
             INepaliCalendar nepali,
             ZKAttendance.Infrastructure.Persistence.AttendanceDbContext db,
             Notifier notifier,
             ILogger<EmployeesApiController> logger)
         {
             _employees = employees;
+            _enrollment = enrollment;
             _nepali = nepali;
             _db = db;
             _notifier = notifier;
@@ -169,6 +172,7 @@ namespace ZKAttendance.Api.Controllers
         private bool IsAdmin => User.IsInRole("Admin");
 
         /// <summary>All approved employees, optionally filtered by department.</summary>
+        /// <param name="departmentId">Only employees in this department.</param>
         /// <param name="includePending">Also return employees still awaiting approval.</param>
         [HttpGet]
         [ProducesResponseType(200)]
@@ -183,12 +187,22 @@ namespace ZKAttendance.Api.Controllers
             if (!includePending)
                 items = items.Where(e => e.ApprovalStatus != "Pending" && e.ApprovalStatus != "Rejected").ToList();
 
-            var loginEmpIds = await _db.ApiUsers
+            var logins = await _db.ApiUsers
                 .Where(u => u.EmployeeId != null)
-                .Select(u => u.EmployeeId!.Value)
-                .ToListAsync();
+                .Select(u => new { u.EmployeeId, u.ApiUserId, u.Username, u.Role, u.IsActive })
+                .ToDictionaryAsync(u => u.EmployeeId!.Value);
 
-            return Ok(items.Select(e => Shape(e, loginEmpIds.Contains(e.EmployeeId))));
+            return Ok(items.Select(e =>
+            {
+                logins.TryGetValue(e.EmployeeId, out var login);
+                return Shape(e, login is null ? null : new
+                {
+                    userId = login.ApiUserId,
+                    username = login.Username,
+                    role = login.Role,
+                    active = login.IsActive
+                });
+            }));
         }
 
         /// <summary>Employees added by HR that still need an Admin decision.</summary>
@@ -225,9 +239,14 @@ namespace ZKAttendance.Api.Controllers
         public async Task<IActionResult> Get(int id)
         {
             var item = await _employees.GetEmployeeByIdAsync(id);
-            return item is null
-                ? NotFound(ApiError.From($"Employee {id} not found"))
-                : Ok(Shape(item));
+            if (item is null) return NotFound(ApiError.From($"Employee {id} not found"));
+
+            var login = await _db.ApiUsers
+                .Where(u => u.EmployeeId == id)
+                .Select(u => new { userId = u.ApiUserId, username = u.Username, role = u.Role, active = u.IsActive })
+                .FirstOrDefaultAsync();
+
+            return Ok(Shape(item, login));
         }
 
         /// <summary>Create an employee.</summary>
@@ -277,6 +296,20 @@ namespace ZKAttendance.Api.Controllers
                 CreatedDate = DateTime.Now
             });
 
+            // Enrol on the device(s) this person is already on, so their punches
+            // attribute immediately (the "Employee + EmployeeDevice" step).
+            if (request.LinkDeviceIds is { Count: > 0 } deviceIds)
+            {
+                try
+                {
+                    await _enrollment.AssignAsync(created.EmployeeId, deviceIds.Distinct());
+                }
+                catch (InvalidOperationException ex)
+                {
+                    _logger.LogWarning(ex, "Could not link employee {Id} to devices", created.EmployeeId);
+                }
+            }
+
             if (pending)
             {
                 // CreateEmployeeAsync force-sets IsActive = true; a pending
@@ -293,7 +326,7 @@ namespace ZKAttendance.Api.Controllers
                         "/employees", "employee-approval-request");
             }
 
-            return CreatedAtAction(nameof(Get), new { id = created.EmployeeId }, Shape(created, false));
+            return CreatedAtAction(nameof(Get), new { id = created.EmployeeId }, Shape(created));
         }
 
         /// <summary>Approve a pending employee. Admin only.</summary>
@@ -347,8 +380,13 @@ namespace ZKAttendance.Api.Controllers
             return Ok(new { id, e.ApprovalStatus, message = "Employee rejected" });
         }
 
-        /// <summary>Give an existing employee a login account (role Employee, linked to them).</summary>
+        /// <summary>
+        /// Give an existing employee a login account, linked 1:1 to them. This
+        /// is the ONLY way a login is created — every ApiUser belongs to an
+        /// employee.
+        /// </summary>
         [HttpPost("{id:int}/create-login")]
+        [Authorize(Roles = Roles.Admin)]
         [ProducesResponseType(201)]
         [ProducesResponseType(typeof(ApiError), 400)]
         [ProducesResponseType(typeof(ApiError), 404)]
@@ -356,6 +394,32 @@ namespace ZKAttendance.Api.Controllers
         {
             var emp = await _employees.GetEmployeeByIdAsync(id);
             if (emp is null) return NotFound(ApiError.From($"Employee {id} not found"));
+            if (emp.ApprovalStatus != "Approved" && emp.ApprovalStatus != "")
+                return BadRequest(ApiError.From("Approve this employee before giving them a login."));
+
+            var role = new[] { "Admin", "HR", "Employee" }
+                .FirstOrDefault(r => r.Equals(request.Role, StringComparison.OrdinalIgnoreCase)) ?? "Employee";
+
+            if (await _db.ApiUsers.AnyAsync(u => u.EmployeeId == id))
+                return BadRequest(ApiError.From("This employee already has a login."));
+
+            // The login shares the employee's identity. Fall back to a stable,
+            // unique address derived from the biometric id if they have no email.
+            var email = !string.IsNullOrWhiteSpace(emp.Email)
+                ? emp.Email!.Trim()
+                : $"emp{emp.BiometricUserId}@zkattendance.local";
+
+            // A legacy orphan account with this employee's email (from the old
+            // separate register flow) — adopt it instead of creating a second.
+            var orphan = await _db.ApiUsers
+                .FirstOrDefaultAsync(u => u.EmployeeId == null && u.Email.ToLower() == email.ToLower());
+            if (orphan is not null)
+            {
+                orphan.EmployeeId = id;
+                await _db.SaveChangesAsync();
+                _logger.LogInformation("Adopted orphan login '{Username}' for employee {Id} by {By}", orphan.Username, id, User.Identity?.Name);
+                return Ok(new { orphan.ApiUserId, orphan.Username, orphan.Role, employeeId = id, adopted = true });
+            }
 
             var username = request.Username.Trim();
             if (username.Length < 3) return BadRequest(ApiError.From("Username must be at least 3 characters."));
@@ -363,17 +427,17 @@ namespace ZKAttendance.Api.Controllers
 
             if (await _db.ApiUsers.AnyAsync(u => u.Username.ToLower() == username.ToLower()))
                 return BadRequest(ApiError.From($"Username '{username}' is already taken."));
-            if (await _db.ApiUsers.AnyAsync(u => u.EmployeeId == id))
-                return BadRequest(ApiError.From("This employee already has a login."));
+            if (await _db.ApiUsers.AnyAsync(u => u.Email.ToLower() == email.ToLower()))
+                return BadRequest(ApiError.From($"Email '{email}' is already used by another account. Change this employee's email first."));
 
             var (hash, salt) = PasswordHasher.HashPassword(request.Password);
             var user = new ApiUser
             {
                 Username = username,
-                Email = request.Email?.Trim() ?? emp.Email ?? $"{username}@zkattendance.local",
+                Email = email,
                 PasswordHash = hash,
                 PasswordSalt = salt,
-                Role = "Employee",
+                Role = role,
                 EmployeeId = id,
                 IsActive = true,
                 CreatedDate = DateTime.Now
@@ -381,7 +445,7 @@ namespace ZKAttendance.Api.Controllers
             _db.ApiUsers.Add(user);
             await _db.SaveChangesAsync();
 
-            _logger.LogInformation("Login '{Username}' created for employee {Id} by {By}", username, id, User.Identity?.Name);
+            _logger.LogInformation("Login '{Username}' ({Role}) created for employee {Id} by {By}", username, role, id, User.Identity?.Name);
             return StatusCode(201, new { user.ApiUserId, user.Username, user.Role, employeeId = id });
         }
 
@@ -518,13 +582,43 @@ namespace ZKAttendance.Api.Controllers
             });
         }
 
-        /// <summary>Biometric IDs seen in attendance logs that belong to no employee.</summary>
+        /// <summary>
+        /// Biometric IDs seen in punches that belong to no employee — the front
+        /// of the funnel. An ID counts as "registered" if it is an
+        /// Employee.BiometricUserId OR an EmployeeDevices entry. Each result
+        /// carries the device(s) it was seen on so completing the employee also
+        /// creates the EmployeeDevice link.
+        /// </summary>
         [HttpGet("unregistered")]
         [ProducesResponseType(200)]
         public async Task<IActionResult> GetUnregistered()
-            => Ok(await _employees.GetUnregisteredBiometricIdsAsync());
+        {
+            var known = new HashSet<string>(
+                await _db.Employees.Select(e => e.BiometricUserId).ToListAsync());
+            foreach (var id in await _db.EmployeeDevices.Select(ed => ed.BiometricUserId).ToListAsync())
+                known.Add(id);
 
-        private object Shape(Employee e, bool hasLogin = false) => new
+            var rows = await _db.AttendanceLogs
+                .Where(a => a.EmployeeId == null)
+                .GroupBy(a => a.BiometricUserId)
+                .Select(g => new
+                {
+                    biometricUserId = g.Key,
+                    deviceIds = g.Select(x => x.DeviceId).Distinct().ToList(),
+                    punchCount = g.Count(),
+                    lastSeen = g.Max(x => x.AttendanceTime)
+                })
+                .ToListAsync();
+
+            var result = rows
+                .Where(r => !known.Contains(r.biometricUserId))
+                .OrderBy(r => int.TryParse(r.biometricUserId, out var n) ? n : int.MaxValue)
+                .ToList();
+
+            return Ok(result);
+        }
+
+        private object Shape(Employee e, object? login = null) => new
         {
             e.EmployeeId,
             e.EmployeeName,
@@ -546,7 +640,8 @@ namespace ZKAttendance.Api.Controllers
             hireDateBs = e.HireDate.HasValue ? _nepali.ToBsString(e.HireDate.Value) : null,
             e.IsActive,
             e.ApprovalStatus,
-            hasLogin
+            hasLogin = login is not null,
+            login
         };
     }
 
@@ -559,6 +654,8 @@ namespace ZKAttendance.Api.Controllers
     {
         public string Username { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
-        public string? Email { get; set; }
+
+        /// <summary>"Employee" (default), "HR" or "Admin".</summary>
+        public string Role { get; set; } = "Employee";
     }
 }

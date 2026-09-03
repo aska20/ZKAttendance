@@ -10,7 +10,6 @@ namespace ZKAttendance.Application.Abstractions
     /// </summary>
     public interface ITokenService
     {
-        Task<AuthResponse> RegisterAsync(RegisterRequest request, CancellationToken ct = default);
         Task<AuthResponse?> LoginAsync(LoginRequest request, CancellationToken ct = default);
         Task<AuthResponse?> RefreshAsync(string refreshToken, CancellationToken ct = default);
 

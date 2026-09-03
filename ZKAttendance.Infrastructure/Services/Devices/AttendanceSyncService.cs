@@ -245,10 +245,14 @@ namespace ZKAttendance.Infrastructure.Services.Devices
                 await db.SaveChangesAsync(ct);
 
                 if (unmapped > 0)
+                {
                     _logger.LogWarning(
                         "{Count} punches from {Name} have no employee mapping - " +
                         "check Employees > Unregistered Biometric IDs",
                         unmapped, device.DeviceName);
+
+                    await NotifyUnregisteredAsync(db, device.DeviceName, ct);
+                }
 
                 return new DeviceSyncResult(
                     device.DeviceId, device.DeviceName, true,
@@ -281,6 +285,47 @@ namespace ZKAttendance.Infrastructure.Services.Devices
                 return new DeviceSyncResult(
                     device.DeviceId, device.DeviceName, false, 0, 0, 0, 0, ex.Message);
             }
+        }
+
+        /// <summary>
+        /// Raise a bell notification for Admin and HR when a sync leaves punches
+        /// unattributed — someone is enrolled on the device but not in the
+        /// system. Only fires when there is no unread one already, so a device
+        /// that stays misconfigured does not send a notification every 5 minutes.
+        /// </summary>
+        private static async Task NotifyUnregisteredAsync(AttendanceDbContext db, string deviceName, CancellationToken ct)
+        {
+            const string type = "unregistered-ids";
+
+            // Keep reminding, but not on every 5-minute round — at most once per
+            // 12 hours while the situation is unresolved.
+            var since = DateTime.Now.AddHours(-12);
+            if (await db.Notifications.AnyAsync(n => n.Type == type && n.CreatedDate >= since, ct))
+                return;
+
+            var distinctIds = await db.AttendanceLogs
+                .Where(a => a.EmployeeId == null)
+                .Select(a => a.BiometricUserId)
+                .Distinct()
+                .CountAsync(ct);
+
+            if (distinctIds == 0) return;
+
+            var message =
+                $"{distinctIds} biometric ID(s) are enrolled on a device (latest: {deviceName}) " +
+                "but are not added as employees in the system.";
+
+            foreach (var role in new[] { "Admin", "HR" })
+                db.Notifications.Add(new Notification
+                {
+                    RecipientRole = role,
+                    Message = message,
+                    LinkPath = "/employees",
+                    Type = type,
+                    CreatedDate = DateTime.Now
+                });
+
+            await db.SaveChangesAsync(ct);
         }
 
         private static string DescribeInOut(int mode) => mode switch

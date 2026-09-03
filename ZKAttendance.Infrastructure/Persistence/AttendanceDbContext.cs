@@ -471,6 +471,13 @@ namespace ZKAttendance.Infrastructure.Persistence
                 entity.HasKey(e => e.ApiUserId);
                 entity.HasIndex(e => e.Username).IsUnique().HasDatabaseName("UX_ApiUser_Username");
                 entity.HasIndex(e => e.Email).IsUnique().HasDatabaseName("UX_ApiUser_Email");
+
+                // One login per employee. Filtered so the bootstrap 'admin'
+                // account (EmployeeId = null) is not caught by the constraint.
+                entity.HasIndex(e => e.EmployeeId)
+                      .IsUnique()
+                      .HasFilter("[EmployeeId] IS NOT NULL")
+                      .HasDatabaseName("UX_ApiUser_Employee");
             });
 
             modelBuilder.Entity<RefreshToken>(entity =>

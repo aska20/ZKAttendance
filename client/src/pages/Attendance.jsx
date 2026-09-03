@@ -1,19 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { overview, holidays as holidayApi, departments as deptApi, employees as empApi } from '../api/resources'
+import { overview, departments as deptApi, employees as empApi } from '../api/resources'
 import { useAsync } from '../hooks/useAsync'
 import { apiErrorMessage } from '../lib/errors'
 import { ymd, hm } from '../lib/dates'
 import { PageHeader, Card, Field, Input, Button, ErrorText } from '../components/ui'
 import Combobox from '../components/Combobox'
 import DayDetailModal from '../components/DayDetailModal'
-import { useFeedback } from '../components/feedback'
 
 const isoDay = (d) => ymd(d)
 
-function Cell({ cell, onClick }) {
+function Cell({ cell, day, onClick }) {
   if (!cell) return <td className="border-l border-slate-100 px-2 py-3 text-center text-slate-300">–</td>
   if (cell.status === 'Holiday') {
-    return <td className="border-l border-slate-100 bg-sky-50/40 px-2 py-3 text-center text-[11px] text-sky-500">Holiday</td>
+    const label = day?.holidayName === 'Weekly off' ? 'Off' : (day?.holidayName || 'Holiday')
+    return (
+      <td className="border-l border-slate-100 bg-sky-50/40 px-1 py-3 text-center align-middle" title={day?.holidayName ? `${day.holidayName}${day.holidayType && day.holidayType !== 'Weekly off' ? ` — ${day.holidayType}` : ''}` : 'Holiday'}>
+        <span className="line-clamp-2 text-[10px] leading-tight text-sky-500">{label}</span>
+      </td>
+    )
   }
   if (cell.status === 'Absent') {
     return (
@@ -37,7 +41,6 @@ function Cell({ cell, onClick }) {
 }
 
 export default function Attendance() {
-  const fb = useFeedback()
   const today = useMemo(() => new Date(), [])
   const [range, setRange] = useState(() => ({
     from: isoDay(new Date(today.getTime() - 6 * 864e5)),
@@ -87,69 +90,6 @@ export default function Attendance() {
     setRange({ from: dateIso, to: dateIso })
   }
 
-  // Recompute the grid locally so a holiday toggle shows instantly, then
-  // reconcile with the server in the background.
-  function patchHoliday(dateIso, makeHoliday, name) {
-    setData((d) => {
-      if (!d) return d
-      const days = d.days.map((day) =>
-        day.dateIso === dateIso
-          ? { ...day, isHoliday: makeHoliday, holidayName: makeHoliday ? (name || 'Holiday') : null }
-          : day,
-      )
-      const workingDayCount = days.filter((x) => !x.isHoliday).length
-      const departments = d.departments.map((dept) => ({
-        ...dept,
-        employees: dept.employees.map((e) => {
-          const cell = e.cells[dateIso]
-          if (!cell) return e
-          let { presentDays, absentDays } = e
-          const nextCells = { ...e.cells }
-          if (makeHoliday) {
-            if (cell.status === 'Present') presentDays -= 1
-            else if (cell.status === 'Absent') absentDays -= 1
-            nextCells[dateIso] = { status: 'Holiday', firstIn: null, lastOut: null, hours: 0, punchCount: 0 }
-          } else {
-            // We don't know present/absent without the punch data — the silent
-            // refetch fixes it; show a neutral placeholder for the moment.
-            nextCells[dateIso] = { status: 'Absent', firstIn: null, lastOut: null, hours: 0, punchCount: 0 }
-            absentDays += 1
-          }
-          return { ...e, cells: nextCells, presentDays, absentDays, totalDays: workingDayCount }
-        }),
-      }))
-      return { ...d, days, workingDayCount, departments }
-    })
-  }
-
-  async function toggleHoliday(day) {
-    if (day.holidayName === 'Weekly off') return
-
-    if (day.isHoliday) {
-      const ok = await fb.confirm({ title: 'Remove holiday', message: `Unmark ${day.dateBs} BS as a holiday?`, confirmText: 'Remove' })
-      if (!ok) return
-      patchHoliday(day.dateIso, false)                 // instant
-      try {
-        await holidayApi.removeOnDate(day.dateIso)
-        fetchPivot({ silent: true })                    // reconcile
-      } catch (e) {
-        fb.error(apiErrorMessage(e))
-        fetchPivot({ silent: true })
-      }
-      return
-    }
-
-    const name = await fb.promptText({ title: 'Mark as holiday', label: `Name for ${day.dateBs} BS`, defaultValue: 'Holiday' })
-    if (name === null) return
-    patchHoliday(day.dateIso, true, name || 'Holiday')  // instant
-    try {
-      await holidayApi.create({ holidayName: name || 'Holiday', date: day.dateIso })
-      fetchPivot({ silent: true })                      // reconcile
-    } catch (e) {
-      fb.error(apiErrorMessage(e))
-      fetchPivot({ silent: true })
-    }
-  }
 
   function exportCsv() {
     if (!data) return
@@ -222,19 +162,15 @@ export default function Attendance() {
                 <th className="px-3 py-3 text-center font-medium text-green-600">Present</th>
                 <th className="px-3 py-3 text-center font-medium text-red-500">Absent</th>
                 {data.days.map((d) => (
-                  <th key={d.dateIso} className={`border-l border-slate-100 px-2 py-2 text-center text-xs font-medium ${d.isHoliday ? 'text-sky-500' : ''}`}>
-                    <button onClick={() => focusDay(d.dateIso)} className="block w-full hover:underline" title="Show only this day">
-                      <div>{d.weekday}</div>
-                      <div className="font-normal text-slate-500">{d.dateBs}</div>
-                      <div className="font-normal text-slate-400">{d.dateIso}</div>
-                    </button>
-                    <button
-                      onClick={() => toggleHoliday(d)}
-                      disabled={d.holidayName === 'Weekly off'}
-                      className="mt-1 text-[10px] text-slate-400 hover:text-sky-600 disabled:opacity-40"
-                      title={d.holidayName === 'Weekly off' ? 'Weekly off (fixed)' : d.isHoliday ? 'Unmark holiday' : 'Mark as holiday'}
-                    >
-                      {d.holidayName === 'Weekly off' ? 'off' : d.isHoliday ? '✕ holiday' : '+ holiday'}
+                  <th
+                    key={d.dateIso}
+                    className={`border-l border-slate-100 px-2 py-2 text-center text-xs font-semibold ${d.isHoliday ? 'bg-sky-50/50 text-sky-600' : 'text-slate-500'}`}
+                    title={d.isHoliday
+                      ? `${d.dateBs} BS — ${d.holidayName}${d.holidayType && d.holidayType !== 'Weekly off' ? ` (${d.holidayType})` : ''}`
+                      : `${d.dateBs} BS`}
+                  >
+                    <button onClick={() => focusDay(d.dateIso)} className="w-full hover:underline">
+                      {d.weekday}
                     </button>
                   </th>
                 ))}
@@ -286,6 +222,7 @@ function DeptSection({ dept, days, onCell }) {
             <Cell
               key={d.dateIso}
               cell={e.cells[d.dateIso]}
+              day={d}
               onClick={() => onCell({ employeeId: e.employeeId, employeeName: e.employeeName, date: d.dateIso, dateBs: d.dateBs })}
             />
           ))}

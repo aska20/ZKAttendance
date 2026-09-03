@@ -69,6 +69,18 @@ namespace ZKAttendance.Api.Controllers
                 .Distinct()
                 .Count();
 
+            // People enrolled on a device who were never added to the system —
+            // a standing reminder until an admin/HR completes them.
+            var knownIds = new HashSet<string>(await _context.Employees.Select(e => e.BiometricUserId).ToListAsync());
+            foreach (var id in await _context.EmployeeDevices.Select(ed => ed.BiometricUserId).ToListAsync())
+                knownIds.Add(id);
+            var unregisteredCount = (await _context.AttendanceLogs
+                    .Where(a => a.EmployeeId == null)
+                    .Select(a => a.BiometricUserId)
+                    .Distinct()
+                    .ToListAsync())
+                .Count(id => !knownIds.Contains(id));
+
             var lastSyncTime = await _context.AttendanceLogs
                 .Where(a => a.IsSynced)
                 .OrderByDescending(a => a.SyncedDate)
@@ -102,6 +114,7 @@ namespace ZKAttendance.Api.Controllers
                     activeDevices = await _context.Devices.CountAsync(d => d.IsActive),
                     inactiveDevices = await _context.Devices.CountAsync(d => !d.IsActive)
                 },
+                unregisteredCount,
                 today = new
                 {
                     present = presentToday,
