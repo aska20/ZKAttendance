@@ -17,14 +17,7 @@ function hm(value) {
   return `${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
-// "2083-05-15 BS  (2026-08-31)"
-export function dualDate(bs, ad) {
-  const a = ymd(ad)
-  if (bs && a) return `${bs} BS  (${a})`
-  return bs || a || '—'
-}
-
-// "2026-08-31 17:40"  (year-month-day 24h time)
+// "2026-08-31 17:40" — year-month-day, 24h
 export function dateTime(value) {
   const d = ymd(value)
   const t = hm(value)

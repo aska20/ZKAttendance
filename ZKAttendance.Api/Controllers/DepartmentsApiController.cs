@@ -1,10 +1,13 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ZKAttendance.Api.Security;
+using ZKAttendance.Api.Services;
 using ZKAttendance.Application.Abstractions;
 using ZKAttendance.Application.Dtos.Api;
 using ZKAttendance.Domain.Entities;
+using ZKAttendance.Infrastructure.Security;
 
 namespace ZKAttendance.Api.Controllers
 {
@@ -143,32 +146,90 @@ namespace ZKAttendance.Api.Controllers
     public class EmployeesApiController : ControllerBase
     {
         private readonly IEmployeeService _employees;
+        private readonly IEmployeeDeviceEnrollment _enrollment;
         private readonly INepaliCalendar _nepali;
         private readonly ZKAttendance.Infrastructure.Persistence.AttendanceDbContext _db;
+        private readonly Notifier _notifier;
         private readonly ILogger<EmployeesApiController> _logger;
 
         public EmployeesApiController(
             IEmployeeService employees,
+            IEmployeeDeviceEnrollment enrollment,
             INepaliCalendar nepali,
             ZKAttendance.Infrastructure.Persistence.AttendanceDbContext db,
+            Notifier notifier,
             ILogger<EmployeesApiController> logger)
         {
             _employees = employees;
+            _enrollment = enrollment;
             _nepali = nepali;
             _db = db;
+            _notifier = notifier;
             _logger = logger;
         }
 
-        /// <summary>All employees, optionally filtered by department.</summary>
+        private int? CurrentUserId => int.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var id) ? id : null;
+        private bool IsAdmin => User.IsInRole("Admin");
+
+        /// <summary>All approved employees, optionally filtered by department.</summary>
+        /// <param name="departmentId">Only employees in this department.</param>
+        /// <param name="includePending">Also return employees still awaiting approval.</param>
         [HttpGet]
         [ProducesResponseType(200)]
-        public async Task<IActionResult> GetAll([FromQuery] int? departmentId = null)
+        public async Task<IActionResult> GetAll([FromQuery] int? departmentId = null, [FromQuery] bool includePending = false)
         {
             var items = departmentId.HasValue
                 ? await _employees.GetEmployeesByDepartmentIdAsync(departmentId.Value)
                 : await _employees.GetAllEmployeesAsync();
 
-            return Ok(items.Select(Shape));
+            // Hide records awaiting / denied approval. Legacy rows have an
+            // empty ApprovalStatus and count as approved.
+            if (!includePending)
+                items = items.Where(e => e.ApprovalStatus != "Pending" && e.ApprovalStatus != "Rejected").ToList();
+
+            var logins = await _db.ApiUsers
+                .Where(u => u.EmployeeId != null)
+                .Select(u => new { u.EmployeeId, u.ApiUserId, u.Username, u.Role, u.IsActive })
+                .ToDictionaryAsync(u => u.EmployeeId!.Value);
+
+            return Ok(items.Select(e =>
+            {
+                logins.TryGetValue(e.EmployeeId, out var login);
+                return Shape(e, login is null ? null : new
+                {
+                    userId = login.ApiUserId,
+                    username = login.Username,
+                    role = login.Role,
+                    active = login.IsActive
+                });
+            }));
+        }
+
+        /// <summary>Employees added by HR that still need an Admin decision.</summary>
+        [HttpGet("pending")]
+        [Authorize(Roles = Roles.Admin)]
+        [ProducesResponseType(200)]
+        public async Task<IActionResult> Pending()
+        {
+            var rows = await _db.Employees
+                .Where(e => e.ApprovalStatus == "Pending")
+                .OrderBy(e => e.CreatedDate)
+                .ToListAsync();
+
+            var requesters = await _db.ApiUsers
+                .Where(u => rows.Select(r => r.RequestedByUserId).Contains(u.ApiUserId))
+                .ToDictionaryAsync(u => u.ApiUserId, u => u.Username);
+
+            return Ok(rows.Select(e => new
+            {
+                e.EmployeeId,
+                e.EmployeeName,
+                e.BiometricUserId,
+                e.DepartmentId,
+                e.Title,
+                e.CreatedDate,
+                requestedBy = e.RequestedByUserId.HasValue && requesters.TryGetValue(e.RequestedByUserId.Value, out var u) ? u : null
+            }));
         }
 
         /// <summary>One employee by id.</summary>
@@ -178,9 +239,14 @@ namespace ZKAttendance.Api.Controllers
         public async Task<IActionResult> Get(int id)
         {
             var item = await _employees.GetEmployeeByIdAsync(id);
-            return item is null
-                ? NotFound(ApiError.From($"Employee {id} not found"))
-                : Ok(Shape(item));
+            if (item is null) return NotFound(ApiError.From($"Employee {id} not found"));
+
+            var login = await _db.ApiUsers
+                .Where(u => u.EmployeeId == id)
+                .Select(u => new { userId = u.ApiUserId, username = u.Username, role = u.Role, active = u.IsActive })
+                .FirstOrDefaultAsync();
+
+            return Ok(Shape(item, login));
         }
 
         /// <summary>Create an employee.</summary>
@@ -201,6 +267,9 @@ namespace ZKAttendance.Api.Controllers
             if (await _employees.IsBiometricIdExistsAsync(biometricId))
                 return BadRequest(ApiError.From($"Biometric ID '{biometricId}' is already in use"));
 
+            // Admin → approved immediately. HR → pending an Admin decision.
+            var pending = !IsAdmin;
+
             var created = await _employees.CreateEmployeeAsync(new Employee
             {
                 EmployeeName = request.EmployeeName,
@@ -219,11 +288,165 @@ namespace ZKAttendance.Api.Controllers
                 CheckEarly = request.CheckEarly,
                 CheckOvertime = request.CheckOvertime,
                 CheckHoliday = request.CheckHoliday,
-                IsActive = request.IsActive,
+                IsActive = pending ? false : request.IsActive,
+                ApprovalStatus = pending ? "Pending" : "Approved",
+                RequestedByUserId = CurrentUserId,
+                ApprovedByUserId = pending ? null : CurrentUserId,
+                ApprovedDate = pending ? null : DateTime.Now,
                 CreatedDate = DateTime.Now
             });
 
+            // Enrol on the device(s) this person is already on, so their punches
+            // attribute immediately (the "Employee + EmployeeDevice" step).
+            if (request.LinkDeviceIds is { Count: > 0 } deviceIds)
+            {
+                try
+                {
+                    await _enrollment.AssignAsync(created.EmployeeId, deviceIds.Distinct());
+                }
+                catch (InvalidOperationException ex)
+                {
+                    _logger.LogWarning(ex, "Could not link employee {Id} to devices", created.EmployeeId);
+                }
+            }
+
+            if (pending)
+            {
+                // CreateEmployeeAsync force-sets IsActive = true; a pending
+                // record must stay inactive until an admin approves it.
+                created.IsActive = false;
+                await _db.SaveChangesAsync();
+
+                await _notifier.ToRoleAsync("Admin",
+                    $"{User.Identity?.Name} requested to add employee \"{created.EmployeeName}\".",
+                    "/employees/pending", "employee-approval-request");
+                if (CurrentUserId is { } uid)
+                    await _notifier.ToUserAsync(uid,
+                        $"Your request to add \"{created.EmployeeName}\" was sent to an admin for approval.",
+                        "/employees", "employee-approval-request");
+            }
+
             return CreatedAtAction(nameof(Get), new { id = created.EmployeeId }, Shape(created));
+        }
+
+        /// <summary>Approve a pending employee. Admin only.</summary>
+        [HttpPost("{id:int}/approve")]
+        [Authorize(Roles = Roles.Admin)]
+        [ProducesResponseType(200)]
+        [ProducesResponseType(typeof(ApiError), 404)]
+        public async Task<IActionResult> Approve(int id)
+        {
+            var e = await _db.Employees.FirstOrDefaultAsync(x => x.EmployeeId == id);
+            if (e is null) return NotFound(ApiError.From($"Employee {id} not found"));
+            if (e.ApprovalStatus != "Pending") return BadRequest(ApiError.From("This employee is not pending approval."));
+
+            e.ApprovalStatus = "Approved";
+            e.IsActive = true;
+            e.ApprovedByUserId = CurrentUserId;
+            e.ApprovedDate = DateTime.Now;
+            await _db.SaveChangesAsync();
+
+            if (e.RequestedByUserId is { } uid)
+                await _notifier.ToUserAsync(uid,
+                    $"\"{e.EmployeeName}\" was approved and added by {User.Identity?.Name}.",
+                    "/employees", "employee-approved");
+
+            return Ok(new { id, e.ApprovalStatus, message = "Employee approved" });
+        }
+
+        /// <summary>Reject a pending employee. Admin only.</summary>
+        [HttpPost("{id:int}/reject")]
+        [Authorize(Roles = Roles.Admin)]
+        [ProducesResponseType(200)]
+        [ProducesResponseType(typeof(ApiError), 404)]
+        public async Task<IActionResult> Reject(int id, [FromBody] RejectRequest? body = null)
+        {
+            var e = await _db.Employees.FirstOrDefaultAsync(x => x.EmployeeId == id);
+            if (e is null) return NotFound(ApiError.From($"Employee {id} not found"));
+            if (e.ApprovalStatus != "Pending") return BadRequest(ApiError.From("This employee is not pending approval."));
+
+            e.ApprovalStatus = "Rejected";
+            e.IsActive = false;
+            e.ApprovedByUserId = CurrentUserId;
+            e.ApprovedDate = DateTime.Now;
+            await _db.SaveChangesAsync();
+
+            if (e.RequestedByUserId is { } uid)
+                await _notifier.ToUserAsync(uid,
+                    $"Your request to add \"{e.EmployeeName}\" was rejected by {User.Identity?.Name}." +
+                    (string.IsNullOrWhiteSpace(body?.Reason) ? "" : $" Reason: {body!.Reason}"),
+                    "/employees", "employee-rejected");
+
+            return Ok(new { id, e.ApprovalStatus, message = "Employee rejected" });
+        }
+
+        /// <summary>
+        /// Give an existing employee a login account, linked 1:1 to them. This
+        /// is the ONLY way a login is created — every ApiUser belongs to an
+        /// employee.
+        /// </summary>
+        [HttpPost("{id:int}/create-login")]
+        [Authorize(Roles = Roles.Admin)]
+        [ProducesResponseType(201)]
+        [ProducesResponseType(typeof(ApiError), 400)]
+        [ProducesResponseType(typeof(ApiError), 404)]
+        public async Task<IActionResult> CreateLogin(int id, [FromBody] CreateLoginRequest request)
+        {
+            var emp = await _employees.GetEmployeeByIdAsync(id);
+            if (emp is null) return NotFound(ApiError.From($"Employee {id} not found"));
+            if (emp.ApprovalStatus != "Approved" && emp.ApprovalStatus != "")
+                return BadRequest(ApiError.From("Approve this employee before giving them a login."));
+
+            var role = new[] { "Admin", "HR", "Employee" }
+                .FirstOrDefault(r => r.Equals(request.Role, StringComparison.OrdinalIgnoreCase)) ?? "Employee";
+
+            if (await _db.ApiUsers.AnyAsync(u => u.EmployeeId == id))
+                return BadRequest(ApiError.From("This employee already has a login."));
+
+            // The login shares the employee's identity. Fall back to a stable,
+            // unique address derived from the biometric id if they have no email.
+            var email = !string.IsNullOrWhiteSpace(emp.Email)
+                ? emp.Email!.Trim()
+                : $"emp{emp.BiometricUserId}@zkattendance.local";
+
+            // A legacy orphan account with this employee's email (from the old
+            // separate register flow) — adopt it instead of creating a second.
+            var orphan = await _db.ApiUsers
+                .FirstOrDefaultAsync(u => u.EmployeeId == null && u.Email.ToLower() == email.ToLower());
+            if (orphan is not null)
+            {
+                orphan.EmployeeId = id;
+                await _db.SaveChangesAsync();
+                _logger.LogInformation("Adopted orphan login '{Username}' for employee {Id} by {By}", orphan.Username, id, User.Identity?.Name);
+                return Ok(new { orphan.ApiUserId, orphan.Username, orphan.Role, employeeId = id, adopted = true });
+            }
+
+            var username = request.Username.Trim();
+            if (username.Length < 3) return BadRequest(ApiError.From("Username must be at least 3 characters."));
+            if (request.Password.Length < 8) return BadRequest(ApiError.From("Password must be at least 8 characters."));
+
+            if (await _db.ApiUsers.AnyAsync(u => u.Username.ToLower() == username.ToLower()))
+                return BadRequest(ApiError.From($"Username '{username}' is already taken."));
+            if (await _db.ApiUsers.AnyAsync(u => u.Email.ToLower() == email.ToLower()))
+                return BadRequest(ApiError.From($"Email '{email}' is already used by another account. Change this employee's email first."));
+
+            var (hash, salt) = PasswordHasher.HashPassword(request.Password);
+            var user = new ApiUser
+            {
+                Username = username,
+                Email = email,
+                PasswordHash = hash,
+                PasswordSalt = salt,
+                Role = role,
+                EmployeeId = id,
+                IsActive = true,
+                CreatedDate = DateTime.Now
+            };
+            _db.ApiUsers.Add(user);
+            await _db.SaveChangesAsync();
+
+            _logger.LogInformation("Login '{Username}' ({Role}) created for employee {Id} by {By}", username, role, id, User.Identity?.Name);
+            return StatusCode(201, new { user.ApiUserId, user.Username, user.Role, employeeId = id });
         }
 
         /// <summary>Update an employee.</summary>
@@ -359,13 +582,43 @@ namespace ZKAttendance.Api.Controllers
             });
         }
 
-        /// <summary>Biometric IDs seen in attendance logs that belong to no employee.</summary>
+        /// <summary>
+        /// Biometric IDs seen in punches that belong to no employee — the front
+        /// of the funnel. An ID counts as "registered" if it is an
+        /// Employee.BiometricUserId OR an EmployeeDevices entry. Each result
+        /// carries the device(s) it was seen on so completing the employee also
+        /// creates the EmployeeDevice link.
+        /// </summary>
         [HttpGet("unregistered")]
         [ProducesResponseType(200)]
         public async Task<IActionResult> GetUnregistered()
-            => Ok(await _employees.GetUnregisteredBiometricIdsAsync());
+        {
+            var known = new HashSet<string>(
+                await _db.Employees.Select(e => e.BiometricUserId).ToListAsync());
+            foreach (var id in await _db.EmployeeDevices.Select(ed => ed.BiometricUserId).ToListAsync())
+                known.Add(id);
 
-        private object Shape(Employee e) => new
+            var rows = await _db.AttendanceLogs
+                .Where(a => a.EmployeeId == null)
+                .GroupBy(a => a.BiometricUserId)
+                .Select(g => new
+                {
+                    biometricUserId = g.Key,
+                    deviceIds = g.Select(x => x.DeviceId).Distinct().ToList(),
+                    punchCount = g.Count(),
+                    lastSeen = g.Max(x => x.AttendanceTime)
+                })
+                .ToListAsync();
+
+            var result = rows
+                .Where(r => !known.Contains(r.biometricUserId))
+                .OrderBy(r => int.TryParse(r.biometricUserId, out var n) ? n : int.MaxValue)
+                .ToList();
+
+            return Ok(result);
+        }
+
+        private object Shape(Employee e, object? login = null) => new
         {
             e.EmployeeId,
             e.EmployeeName,
@@ -385,7 +638,24 @@ namespace ZKAttendance.Api.Controllers
             e.CheckHoliday,
             hireDate = e.HireDate,
             hireDateBs = e.HireDate.HasValue ? _nepali.ToBsString(e.HireDate.Value) : null,
-            e.IsActive
+            e.IsActive,
+            e.ApprovalStatus,
+            hasLogin = login is not null,
+            login
         };
+    }
+
+    public class RejectRequest
+    {
+        public string? Reason { get; set; }
+    }
+
+    public class CreateLoginRequest
+    {
+        public string Username { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+
+        /// <summary>"Employee" (default), "HR" or "Admin".</summary>
+        public string Role { get; set; } = "Employee";
     }
 }

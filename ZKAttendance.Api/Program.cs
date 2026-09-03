@@ -4,12 +4,10 @@ using ZKAttendance.Infrastructure.Persistence.Repositories;
 using ZKAttendance.Infrastructure.Services.Attendances;
 using ZKAttendance.Application.Services.Attendances;
 using ZKAttendance.Application.Abstractions;
-using ZKAttendance.Infrastructure.Services.Shifts;
 using ZKAttendance.Infrastructure.NepaliCalendar;
 using ZKAttendance.Infrastructure.Services.Employees;
 using ZKAttendance.Infrastructure.Services.Branches;
 using ZKAttendance.Infrastructure.Services.Departments;
-using ZKAttendance.Infrastructure.Services.WorkShifts;
 using ZKAttendance.Infrastructure.Services.Devices;
 using ZKAttendance.Infrastructure.Services.Report;
 using ZKAttendance.Infrastructure.Services.Common;
@@ -63,7 +61,6 @@ builder.Services.AddScoped<BranchRepository>();
 builder.Services.AddScoped<DeviceRepository>();
 builder.Services.AddScoped<EmployeeRepository>();
 builder.Services.AddScoped<DepartmentRepository>();
-builder.Services.AddScoped<WorkShiftRepository>();
 builder.Services.AddScoped<AttendanceLogRepository>();
 
 // ═══════════════════════════════════════════════════════
@@ -73,15 +70,11 @@ builder.Services.AddScoped<IBrancheService, BrancheService>();
 builder.Services.AddScoped<IDeviceService, DeviceService>();
 builder.Services.AddScoped<IEmployeeService, EmployeeService>();
 builder.Services.AddScoped<IDepartmentService, DepartmentService>();
-builder.Services.AddScoped<IWorkShiftService, WorkShiftService>();
 
 // Attendance
 builder.Services.AddScoped<IAttendanceService, AttendanceService>();
 builder.Services.AddScoped<AttendanceCalculationService>();
 builder.Services.AddScoped<AttendanceQueryService>();
-
-// Shift port -> EF Core adapter
-builder.Services.AddScoped<IShiftAssignmentService, ShiftAssignmentService>();
 
 // Reports
 builder.Services.AddScoped<IReportService, ReportService>();
@@ -96,8 +89,9 @@ builder.Services.AddScoped<IEmployeeDeviceEnrollment, EmployeeDeviceEnrollment>(
 builder.Services.AddScoped<IManualAttendanceEntry, ManualAttendanceEntry>();
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
 
-// Keeps a login account (ApiUser) and its Employee record pointing at one person.
-builder.Services.AddScoped<EmployeeAccountLinker>();
+
+// In-app notifications (bell menu).
+builder.Services.AddScoped<ZKAttendance.Api.Services.Notifier>();
 
 // ═══════════════════════════════════════════════════════
 // Background services

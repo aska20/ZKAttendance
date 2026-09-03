@@ -3,7 +3,8 @@ import { overview, holidays as holidayApi, departments as deptApi, employees as 
 import { useAsync } from '../hooks/useAsync'
 import { apiErrorMessage } from '../lib/errors'
 import { ymd, hm } from '../lib/dates'
-import { PageHeader, Card, Field, Input, Select, Button, ErrorText } from '../components/ui'
+import { PageHeader, Card, Field, Input, Button, ErrorText } from '../components/ui'
+import Combobox from '../components/Combobox'
 import DayDetailModal from '../components/DayDetailModal'
 
 const isoDay = (d) => ymd(d)
@@ -157,7 +158,6 @@ export default function Attendance() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [detail, setDetail] = useState(null)
-  const [busyDay, setBusyDay] = useState(null)
 
   const { data: deptList } = useAsync(() => deptApi.list(), [])
   const { data: allEmployees } = useAsync(() => empApi.list(), [])

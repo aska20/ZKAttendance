@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using ZKAttendance.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using ZKAttendance.Infrastructure.Persistence;
 namespace ZKAttendance.Infrastructure.Migrations
 {
     [DbContext(typeof(AttendanceDbContext))]
-    partial class AttendanceDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260902074531_EmployeeApprovalAndNotifications")]
+    partial class EmployeeApprovalAndNotifications
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -72,11 +75,6 @@ namespace ZKAttendance.Infrastructure.Migrations
                     b.HasIndex("Email")
                         .IsUnique()
                         .HasDatabaseName("UX_ApiUser_Email");
-
-                    b.HasIndex("EmployeeId")
-                        .IsUnique()
-                        .HasDatabaseName("UX_ApiUser_Employee")
-                        .HasFilter("[EmployeeId] IS NOT NULL");
 
                     b.HasIndex("Username")
                         .IsUnique()

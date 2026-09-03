@@ -11,10 +11,11 @@ import Devices from './pages/Devices'
 import Attendance from './pages/Attendance'
 import ErrorLog from './pages/ErrorLog'
 import DailyReport from './pages/DailyReport'
-import UnregisteredIds from './pages/UnregisteredIds'
+import SummaryReport from './pages/SummaryReport'
+import Holidays from './pages/Holidays'
 import Profile from './pages/Profile'
-import RegisterUser from './pages/RegisterUser'
 import MyAttendance from './pages/MyAttendance'
+import PendingApprovals from './pages/PendingApprovals'
 
 const MGMT = ['Admin', 'HR']
 
@@ -44,13 +45,14 @@ export default function App() {
         <Route path="attendance" element={<Manager><Attendance /></Manager>} />
         <Route path="employees" element={<Manager><Employees /></Manager>} />
         <Route path="departments" element={<Manager><Departments /></Manager>} />
-        <Route path="unregistered" element={<Manager><UnregisteredIds /></Manager>} />
         <Route path="branches" element={<Manager><Branches /></Manager>} />
         <Route path="devices" element={<Manager><Devices /></Manager>} />
+        <Route path="holidays" element={<Manager><Holidays /></Manager>} />
         <Route path="errors" element={<Manager><ErrorLog /></Manager>} />
         <Route path="reports/daily" element={<Manager><DailyReport /></Manager>} />
+        <Route path="reports/summary" element={<Manager><SummaryReport /></Manager>} />
 
-        <Route path="users/new" element={<RoleGate roles={['Admin']}><RegisterUser /></RoleGate>} />
+        <Route path="employees/pending" element={<RoleGate roles={['Admin']}><PendingApprovals /></RoleGate>} />
         <Route path="profile" element={<Profile />} />
         <Route path="my-attendance" element={<MyAttendance />} />
       </Route>

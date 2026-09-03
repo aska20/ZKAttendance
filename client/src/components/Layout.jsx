@@ -1,15 +1,17 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import NotificationBell from './NotificationBell'
 
 const managerNav = [
   { to: '/', label: 'Dashboard', end: true },
   { to: '/attendance', label: 'Attendance' },
   { to: '/employees', label: 'Employees' },
   { to: '/departments', label: 'Departments' },
-  { to: '/unregistered', label: 'Unregistered IDs' },
   { to: '/branches', label: 'Branches' },
   { to: '/devices', label: 'Devices' },
+  { to: '/holidays', label: 'Holidays' },
   { to: '/reports/daily', label: 'Daily Report' },
+  { to: '/reports/summary', label: 'Summary Report' },
   { to: '/errors', label: 'Error Log' },
 ]
 
@@ -22,16 +24,24 @@ export default function Layout() {
   return (
     <div className="flex min-h-full">
       <aside className="flex w-56 shrink-0 flex-col bg-slate-900 text-slate-100">
-        <div className="px-5 py-4 text-lg font-semibold tracking-tight">
-          ZK<span className="text-sky-400">Attendance</span>
+        <div className="flex items-center justify-between px-5 py-4">
+          <span className="text-lg font-semibold tracking-tight">
+            ZK<span className="text-sky-400">Attendance</span>
+          </span>
+          <NotificationBell />
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 pb-4">
           {nav.map((item) => (
             <NavItem key={item.to} {...item} />
           ))}
 
+          {isAdmin && (
+            <>
+              <div className="my-2 border-t border-slate-800" />
+              <NavItem to="/employees/pending" label="Pending Approvals" />
+            </>
+          )}
           <div className="my-2 border-t border-slate-800" />
-          {isAdmin && <NavItem to="/users/new" label="Register User" />}
           <NavItem to="/profile" label="Profile & Security" />
         </nav>
         <div className="border-t border-slate-800 px-5 py-4 text-xs text-slate-400">

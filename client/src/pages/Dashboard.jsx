@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { getDashboardSummary } from '../api/dashboard'
 import { apiErrorMessage } from '../lib/errors'
 import { dateTime, hm } from '../lib/dates'
@@ -41,6 +42,20 @@ export default function Dashboard() {
           {data.dateBs} BS &middot; {data.dateAd}
         </p>
       </div>
+
+      {data.unregisteredCount > 0 && (
+        <Link
+          to="/employees"
+          className="block rounded-xl border-l-4 border-l-amber-500 bg-amber-50 px-5 py-4 ring-1 ring-amber-200 hover:bg-amber-100"
+        >
+          <div className="font-semibold text-amber-900">
+            {data.unregisteredCount} person{data.unregisteredCount > 1 ? 's are' : ' is'} enrolled on a device but not added to the system
+          </div>
+          <div className="mt-0.5 text-sm text-amber-800">
+            Their punches are being stored but not counted. Add them from the Employees page →
+          </div>
+        </Link>
+      )}
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <Stat label="Employees" value={counters.totalEmployees} />

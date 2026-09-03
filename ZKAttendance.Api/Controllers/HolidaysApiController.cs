@@ -45,8 +45,12 @@ namespace ZKAttendance.Api.Controllers
             return Ok(rows);
         }
 
-        /// <summary>Mark a day as a holiday. If one already exists on that date it is returned as-is.</summary>
+        /// <summary>
+        /// Mark a day as a holiday (name, type and an optional note). If one
+        /// already exists on that date its details are updated instead.
+        /// </summary>
         [HttpPost]
+        [ProducesResponseType(200)]
         [ProducesResponseType(201)]
         [ProducesResponseType(typeof(ApiError), 400)]
         public async Task<IActionResult> Create([FromBody] HolidayRequest request)
@@ -55,16 +59,26 @@ namespace ZKAttendance.Api.Controllers
                 return BadRequest(ApiError.From("A name is required."));
 
             var date = request.Date.Date;
+            var type = string.IsNullOrWhiteSpace(request.HolidayType) ? "Public" : request.HolidayType!.Trim();
+            var note = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description!.Trim();
+
             var existing = await _db.Holidays.FirstOrDefaultAsync(h => h.IsActive && h.HolidayDate == date);
             if (existing is not null)
-                return Ok(new { existing.HolidayId, existing.HolidayName, date = existing.HolidayDate });
+            {
+                existing.HolidayName = request.HolidayName.Trim();
+                existing.HolidayType = type;
+                existing.Description = note;
+                existing.ModifiedDate = DateTime.Now;
+                await _db.SaveChangesAsync();
+                return Ok(new { existing.HolidayId, existing.HolidayName, date = existing.HolidayDate, existing.HolidayType, existing.Description });
+            }
 
             var holiday = new Holiday
             {
                 HolidayName = request.HolidayName.Trim(),
                 HolidayDate = date,
-                Description = request.Description,
-                HolidayType = request.HolidayType ?? "Public",
+                Description = note,
+                HolidayType = type,
                 DurationDays = 1,
                 IsActive = true,
                 CreatedDate = DateTime.Now
@@ -72,8 +86,8 @@ namespace ZKAttendance.Api.Controllers
             _db.Holidays.Add(holiday);
             await _db.SaveChangesAsync();
 
-            _logger.LogInformation("Holiday '{Name}' added on {Date} by {User}", holiday.HolidayName, date, User.Identity?.Name);
-            return StatusCode(201, new { holiday.HolidayId, holiday.HolidayName, date = holiday.HolidayDate });
+            _logger.LogInformation("Holiday '{Name}' ({Type}) added on {Date} by {User}", holiday.HolidayName, type, date, User.Identity?.Name);
+            return StatusCode(201, new { holiday.HolidayId, holiday.HolidayName, date = holiday.HolidayDate, holiday.HolidayType, holiday.Description });
         }
 
         /// <summary>Remove a holiday (unmark the day).</summary>

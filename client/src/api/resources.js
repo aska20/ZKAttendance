@@ -36,7 +36,7 @@ export const devices = {
 
 // ── Employees ────────────────────────────────────────────────
 export const employees = {
-  list: (departmentId) => get('/Employees', departmentId ? { departmentId } : undefined),
+  list: (params) => get('/Employees', typeof params === 'object' ? params : (params ? { departmentId: params } : undefined)),
   get: (id) => get(`/Employees/${id}`),
   create: (b) => post('/Employees', b),
   update: (id, b) => put(`/Employees/${id}`, b),
@@ -44,6 +44,18 @@ export const employees = {
   remove: (id) => del(`/Employees/${id}`),
   unregistered: () => get('/Employees/unregistered'),
   enrollOnDevices: (id, b) => post(`/Employees/${id}/enroll-on-devices`, b),
+  pending: () => get('/Employees/pending'),
+  approve: (id) => post(`/Employees/${id}/approve`),
+  reject: (id, reason) => post(`/Employees/${id}/reject`, { reason }),
+  createLogin: (id, b) => post(`/Employees/${id}/create-login`, b),
+}
+
+// ── Notifications ────────────────────────────────────────────
+export const notifications = {
+  list: (params) => get('/Notifications', params),
+  unreadCount: () => get('/Notifications/unread-count'),
+  markRead: (id) => post(`/Notifications/${id}/read`),
+  markAllRead: () => post('/Notifications/read-all'),
 }
 
 // ── Attendance ───────────────────────────────────────────────
@@ -61,6 +73,7 @@ export const attendance = {
 // ── Overview (pivot) ─────────────────────────────────────────
 export const overview = {
   get: (params) => get('/Overview', params),
+  summary: (params) => get('/Overview/summary', params),
 }
 
 // ── Holidays ─────────────────────────────────────────────────
@@ -92,7 +105,9 @@ export const account = {
 }
 
 export const users = {
-  register: (b) => post('/Auth/register', b),
+  list: () => get('/Users'),
+  setActive: (id, active) => post(`/Users/${id}/set-active?active=${active}`),
+  setRole: (id, role) => post(`/Users/${id}/set-role?role=${role}`),
 }
 
 // ── Dashboard ────────────────────────────────────────────────

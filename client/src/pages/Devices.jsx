@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { devices, branches } from '../api/resources'
 import { useAsync } from '../hooks/useAsync'
 import { apiErrorMessage } from '../lib/errors'
-import { PageHeader, Button, Table, Modal, Field, Input, Select, ErrorText, Badge } from '../components/ui'
+import { useAuth } from '../context/AuthContext'
+import { PageHeader, Card, Button, Table, Modal, Field, Input, Select, ErrorText, Badge } from '../components/ui'
+import { useFeedback } from '../components/feedback'
 
 const empty = {
   deviceName: '', deviceIP: '', devicePort: 4370, serialNumber: '',
@@ -10,6 +12,8 @@ const empty = {
 }
 
 export default function Devices() {
+  const { isAdmin } = useAuth()
+  const fb = useFeedback()
   const { data, loading, error, reload } = useAsync(
     () => Promise.all([devices.list(), branches.list()]).then(([d, b]) => ({ devices: d, branches: b })),
     [],
@@ -19,7 +23,6 @@ export default function Devices() {
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [busyId, setBusyId] = useState(null)
-  const [notice, setNotice] = useState('')
 
   const list = data?.devices || []
   const branchList = data?.branches || []
@@ -57,13 +60,13 @@ export default function Devices() {
   }
 
   async function act(d, fn, label) {
-    setBusyId(d.deviceId); setNotice('')
+    setBusyId(d.deviceId)
     try {
       const res = await fn(d.deviceId)
-      setNotice(`${d.deviceName}: ${res.message ?? label + ' done'}`)
+      fb.success(`${d.deviceName}: ${res.message ?? label + ' done'}`)
       reload()
     } catch (err) {
-      setNotice(`${d.deviceName}: ${apiErrorMessage(err)}`)
+      fb.error(`${d.deviceName}: ${apiErrorMessage(err)}`)
     } finally {
       setBusyId(null)
     }
@@ -71,7 +74,7 @@ export default function Devices() {
 
   const columns = [
     { key: 'deviceName', header: 'Name', render: (r) => <span className="font-medium text-slate-800">{r.deviceName}</span> },
-    { key: 'deviceIP', header: 'Address', render: (r) => `${r.deviceIP}:${r.devicePort}` },
+    ...(isAdmin ? [{ key: 'deviceIP', header: 'Address', render: (r) => `${r.deviceIP}:${r.devicePort}` }] : []),
     { key: 'branchId', header: 'Branch', render: (r) => branchName(r.branchId) },
     { key: 'role', header: 'Role', render: (r) => <Badge tone={r.role === 'Master' ? 'sky' : 'slate'}>{r.role}</Badge> },
     {
@@ -82,7 +85,7 @@ export default function Devices() {
         </div>
       ),
     },
-    {
+    ...(isAdmin ? [{
       key: 'actions', header: '', render: (r) => (
         <div className="text-right whitespace-nowrap text-xs">
           <button disabled={busyId === r.deviceId} onClick={() => act(r, devices.testConnection, 'Test')} className="text-slate-600 hover:underline">Test</button>
@@ -93,16 +96,24 @@ export default function Devices() {
           )}
         </div>
       ),
-    },
+    }] : []),
   ]
 
   const nf = (k) => ({ value: form[k], onChange: (e) => setForm({ ...form, [k]: e.target.value }) })
 
   return (
     <div>
-      <PageHeader title="Devices" actions={<Button onClick={openCreate}>New device</Button>} />
+      <PageHeader
+        title="Devices"
+        actions={isAdmin ? <Button onClick={openCreate}>New device</Button> : null}
+      />
+      {!isAdmin && (
+        <Card className="mb-4 p-3 text-sm text-slate-600">
+          Network details and device settings are managed by an admin. You can see which
+          devices exist and whether they are online.
+        </Card>
+      )}
       {error && <ErrorText>{error}</ErrorText>}
-      {notice && <div className="mb-3 rounded-md bg-sky-50 px-3 py-2 text-sm text-sky-800 ring-1 ring-sky-200">{notice}</div>}
       <Table columns={columns} rows={list.map((r) => ({ ...r, _key: r.deviceId }))} loading={loading} empty="No devices registered." />
 
       {editing && (
@@ -117,7 +128,7 @@ export default function Devices() {
             <div className="grid grid-cols-3 gap-3">
               <Field label="Serial number"><Input {...nf('serialNumber')} /></Field>
               <Field label="Model"><Input {...nf('deviceModel')} /></Field>
-              <Field label="Comm password" hint="Comm Key on the device. Blank / 0 = none">
+              <Field label="Comm password" hint="Blank = none">
                 <Input
                   type="text"
                   inputMode="numeric"
@@ -132,7 +143,7 @@ export default function Devices() {
             <div className="grid grid-cols-2 gap-3">
               <Field label="Branch" required>
                 <Select {...nf('branchId')} required>
-                  <option value="">— select —</option>
+                  <option value="">Select branch</option>
                   {branchList.map((b) => <option key={b.branchId} value={b.branchId}>{b.branchName}</option>)}
                 </Select>
               </Field>
