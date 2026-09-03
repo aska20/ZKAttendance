@@ -5,6 +5,7 @@ import NotificationBell from './NotificationBell'
 const managerNav = [
   { to: '/', label: 'Dashboard', end: true },
   { to: '/attendance', label: 'Attendance' },
+    { to: '/unregistered', label: 'Unregistered IDs' }, 
   { to: '/employees', label: 'Employees' },
   { to: '/departments', label: 'Departments' },
   { to: '/branches', label: 'Branches' },

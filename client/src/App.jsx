@@ -16,6 +16,7 @@ import Holidays from './pages/Holidays'
 import Profile from './pages/Profile'
 import MyAttendance from './pages/MyAttendance'
 import PendingApprovals from './pages/PendingApprovals'
+import UnregisteredIds from './pages/UnregisteredIds'
 
 const MGMT = ['Admin', 'HR']
 
@@ -43,6 +44,7 @@ export default function App() {
         <Route index element={<Home />} />
 
         <Route path="attendance" element={<Manager><Attendance /></Manager>} />
+        <Route path="unregistered" element={<Manager><UnregisteredIds /></Manager>} />
         <Route path="employees" element={<Manager><Employees /></Manager>} />
         <Route path="departments" element={<Manager><Departments /></Manager>} />
         <Route path="branches" element={<Manager><Branches /></Manager>} />
