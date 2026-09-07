@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { account } from '../api/resources'
 import { useAsync } from '../hooks/useAsync'
 import { apiErrorMessage } from '../lib/errors'
+import { dmy } from '../lib/dates'
 import { PageHeader, Card, Field, Input, Button, ErrorText } from '../components/ui'
 
 export default function Profile() {
@@ -53,7 +54,7 @@ export default function Profile() {
             {row('Employee', data.employeeName)}
             {row('Department', data.departmentName)}
             {row('Last login', data.lastLoginDate ? new Date(data.lastLoginDate).toLocaleString() : 'Never')}
-            {row('Account created', data.createdDate ? new Date(data.createdDate).toLocaleDateString() : '—')}
+            {row('Account created', data.createdDate ? dmy(data.createdDate) : '—')}
           </>
         ) : null}
       </Card>

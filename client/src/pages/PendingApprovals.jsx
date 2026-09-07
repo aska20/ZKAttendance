@@ -1,7 +1,7 @@
 import { employees } from '../api/resources'
 import { useAsync } from '../hooks/useAsync'
 import { apiErrorMessage } from '../lib/errors'
-import { ymd } from '../lib/dates'
+import { dmy } from '../lib/dates'
 import { PageHeader, Table, Button, ErrorText } from '../components/ui'
 import { useFeedback } from '../components/feedback'
 
@@ -33,7 +33,7 @@ export default function PendingApprovals() {
     { key: 'biometricUserId', header: 'Biometric ID' },
     { key: 'title', header: 'Title', render: (r) => r.title || '—' },
     { key: 'requestedBy', header: 'Requested by', render: (r) => r.requestedBy || '—' },
-    { key: 'createdDate', header: 'When', render: (r) => ymd(r.createdDate) },
+    { key: 'createdDate', header: 'When', render: (r) => dmy(r.createdDate) },
     {
       key: 'actions', header: '', render: (r) => (
         <div className="text-right whitespace-nowrap">

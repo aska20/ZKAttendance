@@ -144,6 +144,14 @@ builder.Services.AddTransient<Func<IZkDeviceReader>>(sp => () =>
 builder.Services.AddScoped<IAttendanceSyncService, AttendanceSyncService>();
 builder.Services.AddHostedService<AttendanceSyncBackgroundService>();
 
+// Multi-device enrolment. One ACTIVE device is the Master: the only place a
+// finger is physically captured. Everything else is a Slave and receives its
+// users by being written to from here.
+//
+// No background service and no new settings - propagation runs only when it is
+// asked for, from the employee screen or the Devices page.
+builder.Services.AddScoped<IDeviceEnrollmentOrchestrator, DeviceEnrollmentOrchestrator>();
+
 // ═══════════════════════════════════════════════════════
 // Authentication: JWT Bearer only.
 // The SPA holds a short-lived access token and a rotating refresh token;

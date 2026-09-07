@@ -1,31 +1,75 @@
 import { useEffect, useMemo, useState } from 'react'
 import { holidays as api } from '../api/resources'
 import { apiErrorMessage } from '../lib/errors'
-import { ymd } from '../lib/dates'
-import { PageHeader, Card, ErrorText, Button, Modal, Field, Input, Select, Badge } from '../components/ui'
+import { ymd, dmy, bsDmy, todayIso } from '../lib/dates'
+import { adToBs, buildMonthGrid } from '../lib/nepaliCalendar'
+import { PageHeader, Card, ErrorText, Button, Field, Input, Select, Badge } from '../components/ui'
 import { useFeedback } from '../components/feedback'
 import { useCalendar } from '../context/CalendarContext'
 import DateToggle from '../components/DateToggle'
-import { adToBs } from '../lib/nepaliCalendar'
+import NepaliDatePicker from '../components/NepaliDatePicker'
+import NepaliMonthCalendar from '../components/NepaliMonthCalendar'
 
-const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const TYPES = ['Festival', 'Religious', 'National', 'Public', 'Bandh / strike', 'Company', 'Other']
 
+const emptyForm = { date: '', holidayName: '', holidayType: 'Festival', description: '' }
+
+/**
+ * Holidays, laid out as calendar on the left and entry form on the right.
+ *
+ * The old screen only let a holiday be added by clicking a day, which meant
+ * paging to the right month first and gave nowhere to type a date directly.
+ * Now both work: click a day to load it into the form, or pick the date in the
+ * form itself. The form scrolls independently and sticks, so a long festival
+ * list on the left never pushes the Save button off screen.
+ */
 export default function Holidays() {
   const fb = useFeedback()
-  const { isBs } = useCalendar()
-  const [month, setMonth] = useState(() => {
+  const { isBs, formatDate } = useCalendar()
+
+  const [view, setView] = useState(() => {
     const d = new Date()
-    return { y: d.getFullYear(), m: d.getMonth() }
+    const bs = adToBs(d)
+    return isBs ? { year: bs.year, month: bs.month } : { year: d.getFullYear(), month: d.getMonth() + 1 }
   })
+
   const [holidays, setHolidays] = useState([])
   const [error, setError] = useState('')
-  const [editing, setEditing] = useState(null) // { iso, existing }
-  const [form, setForm] = useState({ holidayName: '', holidayType: 'Festival', description: '' })
+  const [form, setForm] = useState(emptyForm)
+  const [editingExisting, setEditingExisting] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  const first = useMemo(() => new Date(month.y, month.m, 1), [month])
-  const daysInMonth = new Date(month.y, month.m + 1, 0).getDate()
+  // Re-base the visible month when the calendar system is switched.
+  useEffect(() => {
+    setView((v) => {
+      const grid = buildMonthGrid(isBs ? 'AD' : 'BS', v.year, v.month)
+      const anchor = grid.cells.find(Boolean)
+      if (!anchor) return v
+      return isBs
+        ? { year: anchor.bsYear, month: anchor.bsMonth }
+        : { year: anchor.adYear, month: anchor.adMonth }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBs])
+
+  // The AD span the visible month covers — a BS month straddles two AD months,
+  // so the range has to come from the grid rather than from month arithmetic.
+  const span = useMemo(() => {
+    const grid = buildMonthGrid(isBs ? 'BS' : 'AD', view.year, view.month)
+    const real = grid.cells.filter(Boolean)
+    return { from: real[0]?.adIso, to: real[real.length - 1]?.adIso }
+  }, [isBs, view])
+
+  function load() {
+    if (!span.from || !span.to) return
+    setError('')
+    api
+      .list({ from: span.from, to: span.to })
+      .then(setHolidays)
+      .catch((e) => setError(apiErrorMessage(e)))
+  }
+
+  useEffect(load, [span.from, span.to]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const holidayByDate = useMemo(() => {
     const map = {}
@@ -33,35 +77,38 @@ export default function Holidays() {
     return map
   }, [holidays])
 
-  function load() {
-    setError('')
-    api.list({ from: ymd(new Date(month.y, month.m, 1)), to: ymd(new Date(month.y, month.m + 1, 0)) })
-      .then(setHolidays)
-      .catch((e) => setError(apiErrorMessage(e)))
-  }
-  useEffect(load, [month]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  function openDay(iso, isSat) {
-    if (isSat) { fb.info('Saturday is the fixed weekly off.'); return }
+  function selectDay(iso) {
     const existing = holidayByDate[iso]
-    setForm(existing
-      ? { holidayName: existing.holidayName, holidayType: existing.holidayType || 'Festival', description: existing.description || '' }
-      : { holidayName: '', holidayType: 'Festival', description: '' })
-    setEditing({ iso, existing })
+    setEditingExisting(Boolean(existing))
+    setForm(
+      existing
+        ? {
+            date: iso,
+            holidayName: existing.holidayName,
+            holidayType: existing.holidayType || 'Festival',
+            description: existing.description || '',
+          }
+        : { ...emptyForm, date: iso },
+    )
   }
 
   async function save(e) {
     e.preventDefault()
+    if (!form.date) {
+      fb.error('Pick a date first.')
+      return
+    }
     setSaving(true)
     try {
       await api.create({
-        date: editing.iso,
+        date: form.date,
         holidayName: form.holidayName.trim(),
         holidayType: form.holidayType,
         description: form.description.trim() || null,
       })
-      fb.success(editing.existing ? 'Holiday updated' : 'Holiday added')
-      setEditing(null)
+      fb.success(editingExisting ? 'Holiday updated' : 'Holiday added')
+      setForm(emptyForm)
+      setEditingExisting(false)
       load()
     } catch (err) {
       fb.error(apiErrorMessage(err))
@@ -71,134 +118,225 @@ export default function Holidays() {
   }
 
   async function remove(iso) {
-    const ok = await fb.confirm({ title: 'Remove holiday', message: `Unmark ${iso} as a holiday?`, confirmText: 'Remove', danger: true })
+    const ok = await fb.confirm({
+      title: 'Remove holiday',
+      message: `Unmark ${formatDate(iso)} as a holiday?`,
+      confirmText: 'Remove',
+      danger: true,
+    })
     if (!ok) return
     try {
       await api.removeOnDate(iso)
       fb.success('Holiday removed')
-      setEditing(null)
+      if (form.date === iso) {
+        setForm(emptyForm)
+        setEditingExisting(false)
+      }
       load()
-    } catch (err) { fb.error(apiErrorMessage(err)) }
+    } catch (err) {
+      fb.error(apiErrorMessage(err))
+    }
   }
 
-  const cells = []
-  for (let i = 0; i < first.getDay(); i++) cells.push(null)
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
-  const monthLabel = first.toLocaleString('default', { month: 'long', year: 'numeric' })
+  const today = todayIso()
 
   return (
     <div>
       <PageHeader
         title="Holidays"
-        subtitle="Click a day to add or edit a holiday. Marked days are excluded from working-day counts."
+        subtitle="Click a day, or pick a date on the right. Marked days are excluded from working-day counts."
         actions={<DateToggle />}
       />
       {error && <ErrorText>{error}</ErrorText>}
 
-      <Card className="p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <Button variant="secondary" onClick={() => setMonth(({ y, m }) => m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 })}>← Prev</Button>
-          <div className="text-lg font-semibold text-slate-800">{monthLabel}</div>
-          <Button variant="secondary" onClick={() => setMonth(({ y, m }) => m === 11 ? { y: y + 1, m: 0 } : { y, m: m + 1 })}>Next →</Button>
-        </div>
-
-        <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-slate-400">
-          {WD.map((w) => <div key={w} className="py-1">{w}</div>)}
-        </div>
-        <div className="grid grid-cols-7 gap-1">
-          {cells.map((d, i) => {
-            if (d === null) return <div key={i} />
-            const date = new Date(month.y, month.m, d)
-            const iso = ymd(date)
-            const isSat = date.getDay() === 6
-            const h = holidayByDate[iso]
-            const bs = adToBs(date)
-            return (
-              <button
-                key={i}
-                onClick={() => openDay(iso, isSat)}
-                className={`flex h-20 flex-col items-center justify-center gap-0.5 rounded-md border p-1 text-sm transition
-                  ${isSat ? 'border-slate-200 bg-slate-50 text-slate-400'
-                    : h ? 'border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100'
-                    : 'border-slate-200 hover:bg-slate-50'}`}
-              >
-                <div className="flex items-baseline gap-1">
-                  <span className="font-semibold">{d}</span>
-                  {bs && isBs && (
-                    <span className="text-[10px] font-medium text-sky-600">{bs.day}</span>
-                  )}
-                </div>
-                {isSat && <span className="text-[10px]">weekly off</span>}
-                {h && <>
-                  <span className="line-clamp-1 text-[11px] font-medium leading-tight">{h.holidayName}</span>
-                  {h.holidayType && <span className="text-[9px] text-sky-500">{h.holidayType}</span>}
-                </>}
-              </button>
-            )
-          })}
-        </div>
-      </Card>
-
-      <Card className="mt-4 p-4">
-        <div className="mb-2 text-sm font-medium text-slate-700">Holidays this month</div>
-        {holidays.length === 0
-          ? <p className="text-sm text-slate-400">None.</p>
-          : (
-            <ul className="space-y-1 text-sm">
-              {holidays.map((h) => {
-                const bs = adToBs(h.date)
-                return (
-                  <li key={h.holidayId} className="flex items-center justify-between border-b border-slate-50 py-1.5 last:border-0">
-                    <span className="flex items-center gap-2">
-                      <span className="font-medium text-slate-700">
-                        {isBs && bs ? `${bs.dateBs} BS` : `${ymd(h.date)} AD`}
-                      </span>
-                      <span className="font-medium text-slate-900">{h.holidayName}</span>
-                      {h.holidayType && <Badge tone="sky">{h.holidayType}</Badge>}
-                      {h.description && <span className="text-xs text-slate-400">— {h.description}</span>}
+      {/* Half calendar, half entry — each scrolls on its own so a long
+          festival list never pushes Save out of reach. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* ── Left: the month ─────────────────────────────────────── */}
+        <div>
+          <NepaliMonthCalendar
+            view={view}
+            onViewChange={setView}
+            selectedIso={form.date || undefined}
+            onDayClick={(cell) => {
+              if (cell.isSaturday) {
+                fb.info('Saturday is already the fixed weekly off — no holiday needed.')
+                return
+              }
+              selectDay(cell.adIso)
+            }}
+            dayRender={(cell) => {
+              const h = holidayByDate[cell.adIso]
+              if (cell.isSaturday) {
+                return {
+                  tone: 'bg-slate-50',
+                  dayClass: 'text-rose-400',
+                  title: 'Weekly off',
+                  bottom: <span className="text-[9px] leading-tight text-slate-400">weekly off</span>,
+                }
+              }
+              if (h) {
+                return {
+                  tone: 'bg-violet-50/70',
+                  dayClass: 'text-violet-700',
+                  title: `${h.holidayName}${h.holidayType ? ` (${h.holidayType})` : ''}`,
+                  bottom: (
+                    <span className="text-[9px] font-medium leading-tight text-violet-700">
+                      {h.holidayName}
                     </span>
-                    <span className="whitespace-nowrap">
-                      <button onClick={() => openDay(ymd(h.date), false)} className="text-xs text-sky-600 hover:underline">edit</button>
-                      <button onClick={() => remove(ymd(h.date))} className="ml-3 text-xs text-red-600 hover:underline">remove</button>
-                    </span>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-      </Card>
+                  ),
+                }
+              }
+              return {}
+            }}
+          />
 
-      {editing && (
-        <Modal
-          title={`${editing.existing ? 'Edit' : 'Add'} holiday — ${editing.iso}`}
-          onClose={() => setEditing(null)}
-        >
-          <form onSubmit={save} className="space-y-4">
-            <Field label="Name" required hint="e.g. Teej, Tihar, Dashain, Constitution Day">
-              <Input autoFocus value={form.holidayName} onChange={(e) => setForm({ ...form, holidayName: e.target.value })} required />
-            </Field>
-            <Field label="Type">
-              <Select value={form.holidayType} onChange={(e) => setForm({ ...form, holidayType: e.target.value })}>
-                {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-              </Select>
-            </Field>
-            <Field label="Note" hint="Optional — a short description">
-              <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="e.g. Women's festival, government holiday" />
-            </Field>
-            <div className="sticky bottom-0 -mx-4 sm:-mx-6 -mb-4 sm:-mb-6 px-4 sm:px-6 py-3 bg-white/95 backdrop-blur-xs flex items-center justify-between gap-2 border-t border-slate-100 z-10">
-              <span>
-                {editing.existing && (
-                  <Button type="button" variant="danger" onClick={() => remove(editing.iso)}>Remove</Button>
-                )}
-              </span>
-              <span className="flex gap-2">
-                <Button type="button" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
-                <Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
-              </span>
+          {/* This month's list, scrollable */}
+          <Card className="mt-4">
+            <div className="border-b border-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700">
+              Holidays this month
+              <span className="ml-2 text-xs font-normal text-slate-400">({holidays.length})</span>
             </div>
-          </form>
-        </Modal>
-      )}
+            <div className="max-h-64 overflow-y-auto overscroll-contain">
+              {holidays.length === 0 ? (
+                <p className="px-4 py-6 text-center text-sm text-slate-400">
+                  Nothing marked in this month.
+                </p>
+              ) : (
+                <ul className="divide-y divide-slate-50">
+                  {holidays.map((h) => {
+                    const iso = ymd(h.date)
+                    const bs = adToBs(h.date)
+                    return (
+                      <li key={h.holidayId} className="flex items-start justify-between gap-3 px-4 py-2.5">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium text-slate-900">{h.holidayName}</span>
+                            {h.holidayType && <Badge tone="sky">{h.holidayType}</Badge>}
+                          </div>
+                          <div className="mt-0.5 text-xs text-slate-500 tabular-nums">
+                            {isBs
+                              ? `${bsDmy(bs?.dateBs)} BS · ${dmy(h.date)} AD`
+                              : `${dmy(h.date)} AD · ${bsDmy(bs?.dateBs)} BS`}
+                          </div>
+                          {h.description && (
+                            <div className="mt-0.5 text-xs text-slate-400">{h.description}</div>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 gap-3 text-xs">
+                          <button onClick={() => selectDay(iso)} className="text-sky-600 hover:underline">
+                            edit
+                          </button>
+                          <button onClick={() => remove(iso)} className="text-red-600 hover:underline">
+                            remove
+                          </button>
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+          </Card>
+        </div>
+
+        {/* ── Right: add / edit ───────────────────────────────────── */}
+        <div className="lg:sticky lg:top-6 lg:self-start">
+          <Card className="p-4 sm:p-5">
+            <h2 className="text-base font-semibold text-slate-900">
+              {editingExisting ? 'Edit holiday' : 'Add a holiday'}
+            </h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              {editingExisting
+                ? 'Saving overwrites the entry already on this date.'
+                : 'Pick any date — past or future. Future holidays are what the calendar needs in advance.'}
+            </p>
+
+            <form onSubmit={save} className="mt-4 space-y-4">
+              <Field
+                label={`Date (${isBs ? 'BS' : 'AD'})`}
+                required
+                hint="Holidays are declared ahead of time, so future dates are allowed here."
+              >
+                <NepaliDatePicker
+                  value={form.date}
+                  onChange={(date) => selectDay(date)}
+                  disableFuture={false}
+                  clearable
+                  placeholder="Choose a date"
+                />
+              </Field>
+
+              {form.date && (
+                <div className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 ring-1 ring-slate-200">
+                  <div className="tabular-nums">
+                    {isBs
+                      ? `${bsDmy(adToBs(form.date)?.dateBs)} BS · ${dmy(form.date)} AD`
+                      : `${dmy(form.date)} AD · ${bsDmy(adToBs(form.date)?.dateBs)} BS`}
+                    {form.date < today && <span className="ml-2 text-slate-400">(past date)</span>}
+                    {form.date > today && <span className="ml-2 text-sky-600">(upcoming)</span>}
+                  </div>
+                </div>
+              )}
+
+              <Field label="Name" required hint="e.g. Teej, Tihar, Dashain, Constitution Day">
+                <Input
+                  value={form.holidayName}
+                  onChange={(e) => setForm({ ...form, holidayName: e.target.value })}
+                  required
+                  placeholder="Holiday name"
+                />
+              </Field>
+
+              <Field label="Type">
+                <Select
+                  value={form.holidayType}
+                  onChange={(e) => setForm({ ...form, holidayType: e.target.value })}
+                >
+                  {TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+
+              <Field label="Note" hint="Optional — a short description">
+                <Input
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  placeholder="e.g. Women's festival, government holiday"
+                />
+              </Field>
+
+              <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                <span>
+                  {editingExisting && (
+                    <Button type="button" variant="danger" onClick={() => remove(form.date)}>
+                      Remove
+                    </Button>
+                  )}
+                </span>
+                <span className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setForm(emptyForm)
+                      setEditingExisting(false)
+                    }}
+                  >
+                    Clear
+                  </Button>
+                  <Button type="submit" disabled={saving || !form.date}>
+                    {saving ? 'Saving…' : editingExisting ? 'Update' : 'Add holiday'}
+                  </Button>
+                </span>
+              </div>
+            </form>
+          </Card>
+        </div>
+      </div>
     </div>
   )
 }

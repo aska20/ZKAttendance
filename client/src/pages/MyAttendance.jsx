@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { attendance } from '../api/resources'
 import { apiErrorMessage } from '../lib/errors'
 import { PageHeader, Card, Table, Field, Select, ErrorText, Badge } from '../components/ui'
-import { ymd, hm } from '../lib/dates'
+import { dmy, bsDmy, hm } from '../lib/dates'
 import { useCalendar } from '../context/CalendarContext'
 import DateToggle from '../components/DateToggle'
 
@@ -33,7 +33,7 @@ export default function MyAttendance() {
       header: 'Date',
       render: (r) => (
         <span className="font-medium text-slate-800">
-          {isBs ? `${r.nepaliDate} BS` : `${ymd(r.date)} AD`}
+          {isBs ? `${bsDmy(r.nepaliDate)} BS` : `${dmy(r.date)} AD`}
         </span>
       ),
     },

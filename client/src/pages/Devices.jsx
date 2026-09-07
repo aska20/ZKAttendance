@@ -1,12 +1,12 @@
 import { useState } from 'react'
-import { devices, branches } from '../api/resources'
+import { devices, branches, enrollment } from '../api/resources'
 import { useAsync } from '../hooks/useAsync'
 import { apiErrorMessage } from '../lib/errors'
 import { useAuth } from '../context/AuthContext'
 import { PageHeader, Card, Button, Table, Modal, Field, Input, Select, ErrorText, Badge } from '../components/ui'
 import { useFeedback } from '../components/feedback'
 import { FaEdit } from 'react-icons/fa'
-import { FiWifi, FiRefreshCw, FiPower } from 'react-icons/fi'
+import { FiWifi, FiRefreshCw, FiPower, FiUsers } from 'react-icons/fi'
 
 const empty = {
   deviceName: '', deviceIP: '', devicePort: 4370, serialNumber: '',
@@ -95,11 +95,49 @@ export default function Devices() {
     act(d, devices.reactivate, 'Reactivate', 'reactivate')
   }
 
+  // Filling a newly added terminal from the templates already cached in the
+  // database. Without this a second device knows nobody until each person is
+  // walked back to it, which is the whole reason the templates are stored.
+  const [provisioning, setProvisioning] = useState(null)
+
+  async function provision(d) {
+    const ok = await fb.confirm({
+      title: `Push users to ${d.deviceName}`,
+      message:
+        'Every active employee with a stored fingerprint will be written to this terminal. ' +
+        'Safe to repeat — existing users are overwritten, not duplicated.',
+      confirmText: 'Push users',
+    })
+    if (!ok) return
+
+    setProvisioning(d.deviceId)
+    try {
+      const res = await enrollment.provisionDevice(d.deviceId)
+      if (res.employeesWritten > 0) fb.success(res.message)
+      else fb.error(res.message)
+      reload()
+    } catch (err) {
+      fb.error(apiErrorMessage(err, 'Could not reach the terminal'))
+    } finally {
+      setProvisioning(null)
+    }
+  }
+
   const columns = [
     { key: 'deviceName', header: 'Name', render: (r) => <span className="font-medium text-slate-800">{r.deviceName}</span> },
     ...(isAdmin ? [{ key: 'deviceIP', header: 'Address', render: (r) => `${r.deviceIP}:${r.devicePort}` }] : []),
     { key: 'branchId', header: 'Branch', render: (r) => branchName(r.branchId) },
     { key: 'role', header: 'Role', render: (r) => <Badge tone={r.role === 'Master' ? 'sky' : 'slate'}>{r.role}</Badge> },
+    {
+      key: 'provisioned',
+      header: 'Users',
+      render: (r) =>
+        r.isProvisioned ? (
+          <Badge tone="green">Filled</Badge>
+        ) : (
+          <Badge tone="amber">Not filled</Badge>
+        ),
+    },
     {
       key: 'state', header: 'State', render: (r) => (
         <div className="flex gap-1">
@@ -119,6 +157,19 @@ export default function Devices() {
 
         return (
           <div className="flex items-center justify-end gap-1">
+            <button
+              type="button"
+              disabled={provisioning === r.deviceId}
+              onClick={() => provision(r)}
+              title="Push all enrolled users and fingerprints to this terminal"
+              className={`rounded p-1.5 transition-colors cursor-pointer ${
+                provisioning === r.deviceId
+                  ? 'bg-violet-50 text-violet-600 cursor-wait'
+                  : 'text-slate-500 hover:bg-violet-50 hover:text-violet-600'
+              }`}
+            >
+              <FiUsers className={`h-4 w-4 ${provisioning === r.deviceId ? 'animate-pulse' : ''}`} />
+            </button>
             <button
               type="button"
               disabled={isBusy}
@@ -189,6 +240,23 @@ export default function Devices() {
         </Card>
       )}
       {error && <ErrorText>{error}</ErrorText>}
+
+      {isAdmin && list.length > 1 && (
+        <Card className="mb-4 p-3.5 text-sm text-slate-600">
+          <span className="font-medium text-slate-800">Several terminals are registered.</span>{' '}
+          Fingerprints are captured on the <b>Master</b> only, then copied to the others from the
+          stored copy — nobody scans twice. Use the{' '}
+          <FiUsers className="inline h-3.5 w-3.5 text-violet-600" /> action to fill a terminal that
+          was added later or was offline.
+          {!list.some((d) => d.role === 'Master') && (
+            <span className="mt-1.5 block text-amber-700">
+              No device is marked Master yet, so the first active one is used. Set one explicitly to
+              avoid surprises.
+            </span>
+          )}
+        </Card>
+      )}
+
       <Table columns={columns} rows={list.map((r) => ({ ...r, _key: r.deviceId }))} loading={loading} empty="No devices registered." />
 
       {editing && (

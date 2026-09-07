@@ -52,6 +52,27 @@ export const employees = {
   updatePhoto: (id, photoUrl) => api.patch(`/Employees/${id}/photo`, { photoUrl }).then(r => r.data),
 }
 
+// ── Biometric enrolment ──────────────────────────────────────
+// Getting a person who exists here to also exist on the terminals.
+// `start` is what makes the ZKTeco screen switch to "place finger" /
+// open the face-registration camera for this employee.
+export const enrollment = {
+  status: (employeeId) => get(`/Employees/${employeeId}/enrollment/status`),
+  pushUser: (employeeId, deviceId) =>
+    post(`/Employees/${employeeId}/enrollment/push-user${deviceId ? `?deviceId=${deviceId}` : ''}`),
+  start: (employeeId, { deviceId, fingerIndex = 0 } = {}) => {
+    const q = new URLSearchParams()
+    if (deviceId) q.set('deviceId', deviceId)
+    q.set('fingerIndex', String(fingerIndex))
+    return post(`/Employees/${employeeId}/enrollment/start?${q}`)
+  },
+  cancel: (employeeId, deviceId) =>
+    post(`/Employees/${employeeId}/enrollment/cancel${deviceId ? `?deviceId=${deviceId}` : ''}`),
+  propagate: (employeeId) => post(`/Employees/${employeeId}/enrollment/propagate`),
+  provisionDevice: (deviceId) => post(`/Devices/${deviceId}/provision`),
+  reconcileAll: (deviceId = 0) => post(`/Devices/${deviceId}/reconcile-all`),
+}
+
 // ── Notifications ────────────────────────────────────────────
 export const notifications = {
   list: (params) => get('/Notifications', params),

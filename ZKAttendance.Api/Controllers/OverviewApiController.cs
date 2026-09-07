@@ -3,16 +3,28 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ZKAttendance.Api.Security;
 using ZKAttendance.Application.Abstractions;
+using ZKAttendance.Domain.Entities;
 using ZKAttendance.Infrastructure.Persistence;
 
 namespace ZKAttendance.Api.Controllers
 {
     /// <summary>
     /// The attendance overview / pivot: employees down the side, days across the
-    /// top, one status per cell. Absent = the day is a working day and the
-    /// employee has no punch at all. First check-in and last check-out are the
-    /// visible summary; every individual punch is still in the log and reachable
-    /// through GET /api/Attendance/day.
+    /// top, one status per cell.
+    ///
+    /// WHEN A DAY COUNTS AS ABSENT
+    /// ---------------------------
+    /// Only once the day is CLOSED. A day is closed when it is in the past, or
+    /// it is today and the shift end (plus a grace period) has already passed.
+    /// Until then the cell reads "Upcoming", because somebody who has not yet
+    /// arrived at 9am is not absent — and a day next week certainly is not.
+    ///
+    /// Days before the employee's hire date read "Not Joined" rather than
+    /// absent, so a new joiner does not start life with a wall of red.
+    ///
+    /// First check-in and last check-out are the visible summary; every
+    /// individual punch is still in the log and reachable through
+    /// GET /api/Attendance/day.
     /// </summary>
     [Route("api/Overview")]
     [ApiController]
@@ -29,6 +41,22 @@ namespace ZKAttendance.Api.Controllers
             _db = db;
             _nepali = nepali;
         }
+
+        /// <summary>
+        /// Fallback cut-off used when an employee has no shift assigned: the
+        /// time of day after which a no-show counts as absent.
+        ///
+        /// An employee WITH a WorkShift uses that shift's EndTime in preference
+        /// to this. These constants only cover the gap for those who have none,
+        /// and are kept in code on purpose so appsettings.json is untouched.
+        /// </summary>
+        private static readonly TimeSpan DefaultCloseTime = new(18, 0, 0);
+
+        /// <summary>Slack after the shift ends before a no-show becomes absent.</summary>
+        private const int CloseGraceMinutes = 30;
+
+        /// <summary>Under this many hours, a present day is recorded as a half day.</summary>
+        private const double HalfDayUnderHours = 4.0;
 
         /// <param name="from">Gregorian start date. Defaults to 6 days ago.</param>
         /// <param name="to">Gregorian end date. Defaults to today.</param>
@@ -52,6 +80,9 @@ namespace ZKAttendance.Api.Controllers
             if ((end - start).TotalDays > 92)
                 return BadRequest(new { message = "Range too wide — 92 days maximum." });
 
+            var now = DateTime.Now;
+            var today = now.Date;
+
             // ── days + holidays ────────────────────────────────────────
             var holidayRows = await _db.Holidays
                 .Where(h => h.IsActive && h.HolidayDate >= start && h.HolidayDate <= end)
@@ -72,11 +103,16 @@ namespace ZKAttendance.Api.Controllers
                     DateBs = _nepali.ToBsString(d),
                     Weekday = d.DayOfWeek.ToString()[..3],
                     IsHoliday = weeklyOff || named,
+                    IsWeeklyOff = weeklyOff && !named,
+                    IsFuture = d > today,
+                    IsToday = d == today,
                     HolidayName = named ? h!.HolidayName : (weeklyOff ? "Weekly off" : null),
                     HolidayType = named ? h!.HolidayType : (weeklyOff ? "Weekly off" : null)
                 });
             }
-            var workingDayCount = days.Count(x => !x.IsHoliday);
+
+            // Every working day in the window, and the subset that has finished.
+            var scheduledWorkingDays = days.Count(x => !x.IsHoliday);
 
             // ── employees ──────────────────────────────────────────────
             var empQuery = _db.Employees
@@ -97,10 +133,20 @@ namespace ZKAttendance.Api.Controllers
                 .OrderBy(e => e.EmployeeName)
                 .ToListAsync();
 
+            // Shift end times drive "has this working day finished for this person".
+            var shiftIds = employees.Where(e => e.DefaultShiftId.HasValue)
+                                    .Select(e => e.DefaultShiftId!.Value)
+                                    .Distinct().ToList();
+            var shifts = shiftIds.Count == 0
+                ? new Dictionary<int, WorkShift>()
+                : await _db.WorkShifts.Where(s => shiftIds.Contains(s.ShiftId))
+                                      .ToDictionaryAsync(s => s.ShiftId);
+
             var empIds = employees.Select(e => e.EmployeeId).ToList();
             var biometricMap = employees
                 .Where(e => !string.IsNullOrWhiteSpace(e.BiometricUserId))
-                .ToDictionary(e => e.BiometricUserId, e => e.EmployeeId);
+                .GroupBy(e => e.BiometricUserId)
+                .ToDictionary(g => g.Key, g => g.First().EmployeeId);
 
             // ── punches for the whole window, one query ─────────────────
             var logs = await _db.AttendanceLogs
@@ -135,29 +181,83 @@ namespace ZKAttendance.Api.Controllers
                     employees = g.Select(e =>
                     {
                         var cells = new Dictionary<string, object>();
-                        int present = 0, absent = 0;
+                        int present = 0, absent = 0, halfDay = 0, upcoming = 0, closedWorkingDays = 0;
+                        double totalHours = 0;
+                        var hourSamples = new List<double>();
+
+                        // When this person's working day ends.
+                        var closeTime = e.DefaultShiftId is { } sid && shifts.TryGetValue(sid, out var sh)
+                            ? sh.EndTime
+                            : DefaultCloseTime;
+                        var closeMoment = closeTime.Add(TimeSpan.FromMinutes(CloseGraceMinutes));
+
+                        var hireDate = e.HireDate?.Date;
 
                         foreach (var day in days)
                         {
-                            if (day.IsHoliday)
+                            // 1. Before they joined — not their problem.
+                            if (hireDate is { } hd && day.Date < hd)
                             {
-                                cells[day.DateIso] = new { status = "Holiday", firstIn = (DateTime?)null, lastOut = (DateTime?)null, hours = 0.0, punchCount = 0 };
+                                cells[day.DateIso] = Cell("Not Joined");
                                 continue;
                             }
 
-                            if (byEmpDay.TryGetValue((e.EmployeeId, day.Date), out var times) && times.Count > 0)
+                            // 2. Non-working day.
+                            if (day.IsHoliday)
                             {
-                                var firstIn = times.First();
-                                var lastOut = times.Count > 1 ? times.Last() : (DateTime?)null;
-                                var hours = lastOut is { } lo ? Math.Round((lo - firstIn).TotalHours, 2) : 0.0;
-                                cells[day.DateIso] = new { status = "Present", firstIn, lastOut, hours, punchCount = times.Count };
-                                present++;
+                                cells[day.DateIso] = Cell(day.IsWeeklyOff ? "Day Off" : "Holiday");
+                                continue;
                             }
-                            else
+
+                            var hasPunches = byEmpDay.TryGetValue((e.EmployeeId, day.Date), out var times)
+                                             && times.Count > 0;
+
+                            // 3. Has the day finished for this employee?
+                            var isClosed = day.Date < today
+                                           || (day.Date == today && now.TimeOfDay >= closeMoment);
+
+                            if (!hasPunches)
                             {
-                                cells[day.DateIso] = new { status = "Absent", firstIn = (DateTime?)null, lastOut = (DateTime?)null, hours = 0.0, punchCount = 0 };
+                                // THE FIX: an unfinished day is never absent.
+                                if (!isClosed)
+                                {
+                                    cells[day.DateIso] = Cell("Upcoming");
+                                    upcoming++;
+                                    continue;
+                                }
+
+                                cells[day.DateIso] = Cell("Absent");
                                 absent++;
+                                closedWorkingDays++;
+                                continue;
                             }
+
+                            // 4. Present. First in / last out is the summary; the
+                            //    punch count tells the UI there is more to see.
+                            var firstIn = times!.First();
+                            var lastOut = times!.Count > 1 ? times!.Last() : (DateTime?)null;
+                            var hours = lastOut is { } lo ? Math.Round((lo - firstIn).TotalHours, 2) : 0.0;
+
+                            var status = hours > 0 && hours < HalfDayUnderHours ? "Half Day" : "Present";
+                            if (status == "Half Day") halfDay++;
+                            present++;
+                            closedWorkingDays++;
+
+                            if (hours > 0)
+                            {
+                                totalHours += hours;
+                                hourSamples.Add(hours);
+                            }
+
+                            cells[day.DateIso] = new
+                            {
+                                status,
+                                firstIn,
+                                lastOut,
+                                hours,
+                                punchCount = times.Count,
+                                isClosed
+                            };
                         }
 
                         var branch = e.EmployeeBranches?.FirstOrDefault(b => b.IsActive)?.Branch?.BranchName
@@ -172,9 +272,21 @@ namespace ZKAttendance.Api.Controllers
                             departmentName = e.Department?.DepartmentName,
                             branchName = branch,
                             e.Title,
-                            totalDays = workingDayCount,
+                            e.PhotoUrl,
+                            hireDate = e.HireDate,
+                            hireDateBs = e.HireDate.HasValue ? _nepali.ToBsString(e.HireDate.Value) : null,
+
+                            // totalDays counts only days that have actually finished,
+                            // so present + absent always reconciles with it.
+                            totalDays = closedWorkingDays,
+                            scheduledDays = scheduledWorkingDays,
                             presentDays = present,
                             absentDays = absent,
+                            halfDays = halfDay,
+                            upcomingDays = upcoming,
+
+                            totalHours = Math.Round(totalHours, 2),
+                            avgHours = hourSamples.Count > 0 ? Math.Round(hourSamples.Average(), 2) : 0.0,
                             cells
                         };
                     }).ToList()
@@ -187,18 +299,32 @@ namespace ZKAttendance.Api.Controllers
                 toAd = end.ToString("yyyy-MM-dd"),
                 fromBs = _nepali.ToBsString(start),
                 toBs = _nepali.ToBsString(end),
-                workingDayCount,
+                workingDayCount = scheduledWorkingDays,
                 days,
                 employeeCount = employees.Count,
                 departments = deptGroups
             });
+
+            static object Cell(string status) => new
+            {
+                status,
+                firstIn = (DateTime?)null,
+                lastOut = (DateTime?)null,
+                hours = 0.0,
+                punchCount = 0,
+                isClosed = status != "Upcoming"
+            };
         }
 
         /// <summary>
         /// One row per employee for a whole period (a week, month or year):
-        /// days present / absent, total hours, and the earliest check-in and
-        /// latest check-out seen across the period. No per-day grid, so the
-        /// range can be up to a year.
+        /// days present / absent, total and average hours, and the earliest
+        /// check-in and latest check-out seen across the period. No per-day
+        /// grid, so the range can be up to a year.
+        ///
+        /// Absent days are counted against working days that have FINISHED, so
+        /// asking for "this month" halfway through the month does not report
+        /// everybody as absent for the rest of it.
         /// </summary>
         /// <param name="from">Gregorian start. Defaults to the first of this month.</param>
         /// <param name="to">Gregorian end. Defaults to today.</param>
@@ -210,7 +336,8 @@ namespace ZKAttendance.Api.Controllers
             [FromQuery] DateTime? to = null,
             [FromQuery] int? departmentId = null)
         {
-            var today = DateTime.Today;
+            var now = DateTime.Now;
+            var today = now.Date;
             var start = (from ?? new DateTime(today.Year, today.Month, 1)).Date;
             var end = (to ?? today).Date;
             if (end < start) (start, end) = (end, start);
@@ -224,14 +351,20 @@ namespace ZKAttendance.Api.Controllers
                     .ToListAsync())
                 .Select(d => d.Date));
 
-            var workingDays = 0;
+            var workingDays = new List<DateTime>();
             for (var d = start; d <= end; d = d.AddDays(1))
-                if (!_nepali.IsWeeklyOff(d) && !holidayDates.Contains(d)) workingDays++;
+                if (!_nepali.IsWeeklyOff(d) && !holidayDates.Contains(d)) workingDays.Add(d);
 
             var empQuery = _db.Employees.Include(e => e.Department).Where(e => e.IsActive);
             if (departmentId.HasValue) empQuery = empQuery.Where(e => e.DepartmentId == departmentId.Value);
             var employees = await empQuery.OrderBy(e => e.EmployeeName).ToListAsync();
             var empIds = employees.Select(e => e.EmployeeId).ToList();
+
+            var shiftIds = employees.Where(e => e.DefaultShiftId.HasValue)
+                                    .Select(e => e.DefaultShiftId!.Value).Distinct().ToList();
+            var shifts = shiftIds.Count == 0
+                ? new Dictionary<int, WorkShift>()
+                : await _db.WorkShifts.Where(s => shiftIds.Contains(s.ShiftId)).ToDictionaryAsync(s => s.ShiftId);
 
             var logs = await _db.AttendanceLogs
                 .Where(a => a.EmployeeId != null
@@ -241,7 +374,6 @@ namespace ZKAttendance.Api.Controllers
                 .Select(a => new { EmployeeId = a.EmployeeId!.Value, a.AttendanceTime })
                 .ToListAsync();
 
-            // per employee -> per day -> first/last
             var perEmpDay = logs
                 .GroupBy(a => new { a.EmployeeId, Day = a.AttendanceTime.Date })
                 .Select(g => new
@@ -253,7 +385,7 @@ namespace ZKAttendance.Api.Controllers
                 })
                 .ToList();
 
-            string? Hm(TimeSpan? t) => t is { } v ? $"{(int)v.TotalHours:D2}:{v.Minutes:D2}" : null;
+            static string? Hm(TimeSpan? t) => t is { } v ? $"{(int)v.TotalHours:D2}:{v.Minutes:D2}" : null;
 
             var deptGroups = employees
                 .GroupBy(e => new { Id = e.DepartmentId, Name = e.Department?.DepartmentName ?? "No department" })
@@ -264,11 +396,25 @@ namespace ZKAttendance.Api.Controllers
                     departmentName = g.Key.Name,
                     employees = g.Select(e =>
                     {
+                        var closeTime = e.DefaultShiftId is { } sid && shifts.TryGetValue(sid, out var sh)
+                            ? sh.EndTime
+                            : DefaultCloseTime;
+                        var closeMoment = closeTime.Add(TimeSpan.FromMinutes(CloseGraceMinutes));
+                        var hireDate = e.HireDate?.Date;
+
+                        // Working days that have finished AND fall after they joined.
+                        var elapsed = workingDays.Count(d =>
+                            (hireDate is null || d >= hireDate)
+                            && (d < today || (d == today && now.TimeOfDay >= closeMoment)));
+
                         var mine = perEmpDay.Where(x => x.EmployeeId == e.EmployeeId).ToList();
                         var present = mine.Count;
-                        var totalHours = mine
+
+                        var dayHours = mine
                             .Where(x => x.Last is not null)
-                            .Sum(x => Math.Round((x.Last!.Value - x.First).TotalHours, 2));
+                            .Select(x => Math.Round((x.Last!.Value - x.First).TotalHours, 2))
+                            .Where(h => h > 0)
+                            .ToList();
 
                         var ins = mine.Select(x => x.First.TimeOfDay).ToList();
                         var outs = mine.Where(x => x.Last is not null).Select(x => x.Last!.Value.TimeOfDay).ToList();
@@ -281,8 +427,11 @@ namespace ZKAttendance.Api.Controllers
                             departmentId = e.DepartmentId,
                             departmentName = e.Department?.DepartmentName,
                             presentDays = present,
-                            absentDays = Math.Max(0, workingDays - present),
-                            totalHours = Math.Round(totalHours, 1),
+                            absentDays = Math.Max(0, elapsed - present),
+                            workingDaysElapsed = elapsed,
+                            workingDaysScheduled = workingDays.Count,
+                            totalHours = Math.Round(dayHours.Sum(), 1),
+                            avgHours = dayHours.Count > 0 ? Math.Round(dayHours.Average(), 2) : 0.0,
                             earliestIn = Hm(ins.Count > 0 ? ins.Min() : null),
                             latestOut = Hm(outs.Count > 0 ? outs.Max() : null),
                             avgIn = Hm(ins.Count > 0 ? TimeSpan.FromTicks((long)ins.Average(t => t.Ticks)) : null),
@@ -298,7 +447,7 @@ namespace ZKAttendance.Api.Controllers
                 toAd = end.ToString("yyyy-MM-dd"),
                 fromBs = _nepali.ToBsString(start),
                 toBs = _nepali.ToBsString(end),
-                workingDays,
+                workingDays = workingDays.Count,
                 employeeCount = employees.Count,
                 departments = deptGroups
             });
@@ -311,6 +460,9 @@ namespace ZKAttendance.Api.Controllers
             public string DateBs { get; set; } = "";
             public string Weekday { get; set; } = "";
             public bool IsHoliday { get; set; }
+            public bool IsWeeklyOff { get; set; }
+            public bool IsFuture { get; set; }
+            public bool IsToday { get; set; }
             public string? HolidayName { get; set; }
             public string? HolidayType { get; set; }
         }
