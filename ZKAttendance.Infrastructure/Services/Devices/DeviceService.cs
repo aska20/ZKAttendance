@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Caching.Memory;
 using ZKAttendance.Infrastructure.Persistence;
 using ZKAttendance.Infrastructure.Persistence.Repositories;
 using ZKAttendance.Domain.Entities;
@@ -26,11 +26,11 @@ namespace ZKAttendance.Infrastructure.Services.Devices
             _logger = logger;
         }
 
-        public async Task<List<Device>> GetAllDevicesAsync()
+        public async Task<List<Device>> GetAllDevicesAsync(bool includeInactive = false)
         {
             try
             {
-                return await _repository.GetAllAsync();
+                return await _repository.GetAllAsync(includeInactive);
             }
             catch (Exception ex)
             {

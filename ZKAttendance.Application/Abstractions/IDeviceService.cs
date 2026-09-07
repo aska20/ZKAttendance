@@ -1,10 +1,10 @@
-﻿using ZKAttendance.Domain.Entities;
+using ZKAttendance.Domain.Entities;
 
 namespace ZKAttendance.Application.Abstractions
 {
     public interface IDeviceService
     {
-        Task<List<Device>> GetAllDevicesAsync();
+        Task<List<Device>> GetAllDevicesAsync(bool includeInactive = false);
         Task<Device?> GetDeviceByIdAsync(int deviceId);
         Task<List<Device>> GetDevicesByBranchIdAsync(int branchId);
         Task<Device> CreateDeviceAsync(Device device);

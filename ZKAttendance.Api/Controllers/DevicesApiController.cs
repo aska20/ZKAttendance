@@ -43,7 +43,7 @@ namespace ZKAttendance.Api.Controllers
         {
             var items = onlineOnly
                 ? await _devices.GetOnlineDevicesAsync()
-                : await _devices.GetAllDevicesAsync();
+                : await _devices.GetAllDevicesAsync(includeInactive: true);
 
             return Ok(items.Select(Shape));
         }
@@ -201,6 +201,25 @@ namespace ZKAttendance.Api.Controllers
 
             _logger.LogInformation("Device {Id} deactivated; it will be skipped by sync rounds", id);
             return Ok(new { id, isActive = false, message = "Device deactivated" });
+        }
+
+        /// <summary>Reactivate a previously deactivated device.</summary>
+        [Authorize(Roles = Roles.Admin)]
+        [HttpPost("{id:int}/reactivate")]
+        [ProducesResponseType(200)]
+        [ProducesResponseType(typeof(ApiError), 404)]
+        public async Task<IActionResult> Reactivate(int id)
+        {
+            var device = await _devices.GetDeviceByIdAsync(id);
+            if (device is null)
+                return NotFound(ApiError.From($"Device {id} not found"));
+
+            device.IsActive = true;
+            device.ModifiedDate = DateTime.Now;
+            await _devices.UpdateDeviceAsync(device);
+
+            _logger.LogInformation("Device {Id} reactivated", id);
+            return Ok(new { id, isActive = true, message = "Device reactivated" });
         }
 
         private object Shape(Device d) => new

@@ -85,6 +85,16 @@ export default function Devices() {
     act(d, devices.deactivate, 'Deactivate', 'deactivate')
   }
 
+  async function reactivateDevice(d) {
+    const ok = await fb.confirm({
+      title: 'Reactivate device',
+      message: `Reactivate "${d.deviceName}" and resume syncing?`,
+      confirmText: 'Reactivate',
+    })
+    if (!ok) return
+    act(d, devices.reactivate, 'Reactivate', 'reactivate')
+  }
+
   const columns = [
     { key: 'deviceName', header: 'Name', render: (r) => <span className="font-medium text-slate-800">{r.deviceName}</span> },
     ...(isAdmin ? [{ key: 'deviceIP', header: 'Address', render: (r) => `${r.deviceIP}:${r.devicePort}` }] : []),
@@ -145,17 +155,19 @@ export default function Devices() {
             >
               <FaEdit className="h-4 w-4" />
             </button>
-            {r.isActive && (
-              <button
-                type="button"
-                disabled={isBusy}
-                onClick={() => deactivateDevice(r)}
-                title="Deactivate device"
-                className="rounded p-1.5 text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                <FiPower className="h-4 w-4" />
-              </button>
-            )}
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => r.isActive ? deactivateDevice(r) : reactivateDevice(r)}
+              title={r.isActive ? 'Deactivate device' : 'Reactivate device'}
+              className={`rounded p-1.5 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                r.isActive
+                  ? 'text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700'
+                  : 'text-red-500 hover:bg-red-50 hover:text-red-700'
+              }`}
+            >
+              <FiPower className="h-4 w-4" />
+            </button>
           </div>
         )
       },

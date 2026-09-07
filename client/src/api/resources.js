@@ -30,6 +30,7 @@ export const devices = {
   create: (b) => post('/Devices', b),
   update: (id, b) => put(`/Devices/${id}`, b),
   deactivate: (id) => post(`/Devices/${id}/deactivate`),
+  reactivate: (id) => post(`/Devices/${id}/reactivate`),
   testConnection: (id) => post(`/Devices/${id}/test-connection`),
   sync: (id) => post(`/Devices/${id}/sync`),
 }
