@@ -4,12 +4,16 @@ import { apiErrorMessage } from '../lib/errors'
 import { ymd } from '../lib/dates'
 import { PageHeader, Card, ErrorText, Button, Modal, Field, Input, Select, Badge } from '../components/ui'
 import { useFeedback } from '../components/feedback'
+import { useCalendar } from '../context/CalendarContext'
+import DateToggle from '../components/DateToggle'
+import { adToBs } from '../lib/nepaliCalendar'
 
 const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const TYPES = ['Festival', 'Religious', 'National', 'Public', 'Bandh / strike', 'Company', 'Other']
 
 export default function Holidays() {
   const fb = useFeedback()
+  const { isBs } = useCalendar()
   const [month, setMonth] = useState(() => {
     const d = new Date()
     return { y: d.getFullYear(), m: d.getMonth() }
@@ -84,7 +88,11 @@ export default function Holidays() {
 
   return (
     <div>
-      <PageHeader title="Holidays" subtitle="Click a day to add or edit a holiday. Marked days are excluded from working-day counts." />
+      <PageHeader
+        title="Holidays"
+        subtitle="Click a day to add or edit a holiday. Marked days are excluded from working-day counts."
+        actions={<DateToggle />}
+      />
       {error && <ErrorText>{error}</ErrorText>}
 
       <Card className="p-4">
@@ -104,6 +112,7 @@ export default function Holidays() {
             const iso = ymd(date)
             const isSat = date.getDay() === 6
             const h = holidayByDate[iso]
+            const bs = adToBs(date)
             return (
               <button
                 key={i}
@@ -113,7 +122,12 @@ export default function Holidays() {
                     : h ? 'border-sky-300 bg-sky-50 text-sky-700 hover:bg-sky-100'
                     : 'border-slate-200 hover:bg-slate-50'}`}
               >
-                <span className="font-semibold">{d}</span>
+                <div className="flex items-baseline gap-1">
+                  <span className="font-semibold">{d}</span>
+                  {bs && isBs && (
+                    <span className="text-[10px] font-medium text-sky-600">{bs.day}</span>
+                  )}
+                </div>
                 {isSat && <span className="text-[10px]">weekly off</span>}
                 {h && <>
                   <span className="line-clamp-1 text-[11px] font-medium leading-tight">{h.holidayName}</span>
@@ -131,20 +145,25 @@ export default function Holidays() {
           ? <p className="text-sm text-slate-400">None.</p>
           : (
             <ul className="space-y-1 text-sm">
-              {holidays.map((h) => (
-                <li key={h.holidayId} className="flex items-center justify-between border-b border-slate-50 py-1.5 last:border-0">
-                  <span className="flex items-center gap-2">
-                    <span className="text-slate-400">{ymd(h.date)}</span>
-                    <span className="font-medium text-slate-800">{h.holidayName}</span>
-                    {h.holidayType && <Badge tone="sky">{h.holidayType}</Badge>}
-                    {h.description && <span className="text-xs text-slate-400">— {h.description}</span>}
-                  </span>
-                  <span className="whitespace-nowrap">
-                    <button onClick={() => openDay(ymd(h.date), false)} className="text-xs text-sky-600 hover:underline">edit</button>
-                    <button onClick={() => remove(ymd(h.date))} className="ml-3 text-xs text-red-600 hover:underline">remove</button>
-                  </span>
-                </li>
-              ))}
+              {holidays.map((h) => {
+                const bs = adToBs(h.date)
+                return (
+                  <li key={h.holidayId} className="flex items-center justify-between border-b border-slate-50 py-1.5 last:border-0">
+                    <span className="flex items-center gap-2">
+                      <span className="font-medium text-slate-700">
+                        {isBs && bs ? `${bs.dateBs} BS` : `${ymd(h.date)} AD`}
+                      </span>
+                      <span className="font-medium text-slate-900">{h.holidayName}</span>
+                      {h.holidayType && <Badge tone="sky">{h.holidayType}</Badge>}
+                      {h.description && <span className="text-xs text-slate-400">— {h.description}</span>}
+                    </span>
+                    <span className="whitespace-nowrap">
+                      <button onClick={() => openDay(ymd(h.date), false)} className="text-xs text-sky-600 hover:underline">edit</button>
+                      <button onClick={() => remove(ymd(h.date))} className="ml-3 text-xs text-red-600 hover:underline">remove</button>
+                    </span>
+                  </li>
+                )
+              })}
             </ul>
           )}
       </Card>
@@ -166,7 +185,7 @@ export default function Holidays() {
             <Field label="Note" hint="Optional — a short description">
               <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="e.g. Women's festival, government holiday" />
             </Field>
-            <div className="flex justify-between pt-2">
+            <div className="sticky bottom-0 -mx-4 sm:-mx-6 -mb-4 sm:-mb-6 px-4 sm:px-6 py-3 bg-white/95 backdrop-blur-xs flex items-center justify-between gap-2 border-t border-slate-100 z-10">
               <span>
                 {editing.existing && (
                   <Button type="button" variant="danger" onClick={() => remove(editing.iso)}>Remove</Button>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { overview } from '../api/resources'
 import { apiErrorMessage } from '../lib/errors'
 import { ymd, hm } from '../lib/dates'
+import { MdCalendarMonth } from 'react-icons/md'
 import { Modal, Button } from './ui'
 import DayDetailModal from './DayDetailModal'
 
@@ -51,7 +52,16 @@ export default function EmployeeCalendarModal({ employeeId, employeeName, onClos
     : 'border-slate-200 text-slate-300'
 
   return (
-    <Modal title={`${employeeName} — attendance calendar`} onClose={onClose} wide>
+    <Modal
+      title={
+        <span className="inline-flex items-center gap-2">
+          <MdCalendarMonth className="h-5 w-5 text-sky-600" />
+          <span>{employeeName} — Attendance Calendar</span>
+        </span>
+      }
+      onClose={onClose}
+      wide
+    >
       <div className="mb-3 flex items-center justify-between">
         <Button variant="secondary" onClick={() => setMonth(({ y, m }) => m === 0 ? { y: y - 1, m: 11 } : { y, m: m - 1 })}>← Prev</Button>
         <div className="text-center">

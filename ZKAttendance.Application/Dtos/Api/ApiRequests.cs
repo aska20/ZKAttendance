@@ -94,6 +94,9 @@ namespace ZKAttendance.Application.Dtos.Api
         /// <summary>Gregorian date. The BS equivalent is derived, never stored as input.</summary>
         public DateTime? HireDate { get; set; }
 
+        /// <summary>Base-64 data-URL or external URL of the employee's profile photo (optional).</summary>
+        public string? PhotoUrl { get; set; }
+
         // Attendance tracking flags — the entity carries these; the old form set them.
         public bool CheckAttendance { get; set; } = true;
         public bool CheckLate { get; set; } = true;

@@ -12,6 +12,7 @@ import Attendance from './pages/Attendance'
 import ErrorLog from './pages/ErrorLog'
 import DailyReport from './pages/DailyReport'
 import SummaryReport from './pages/SummaryReport'
+import EmployeeReport from './pages/EmployeeReport'
 import Holidays from './pages/Holidays'
 import Profile from './pages/Profile'
 import MyAttendance from './pages/MyAttendance'
@@ -53,6 +54,7 @@ export default function App() {
         <Route path="errors" element={<Manager><ErrorLog /></Manager>} />
         <Route path="reports/daily" element={<Manager><DailyReport /></Manager>} />
         <Route path="reports/summary" element={<Manager><SummaryReport /></Manager>} />
+        <Route path="reports/employee/:id" element={<Manager><EmployeeReport /></Manager>} />
 
         <Route path="employees/pending" element={<RoleGate roles={['Admin']}><PendingApprovals /></RoleGate>} />
         <Route path="profile" element={<Profile />} />

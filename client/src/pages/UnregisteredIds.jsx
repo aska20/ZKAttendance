@@ -4,6 +4,9 @@ import { apiErrorMessage } from '../lib/errors'
 import { useAuth } from '../context/AuthContext'
 import { PageHeader, Card, Button, Table, Modal, Field, Input, Select, Badge, ErrorText } from '../components/ui'
 import { useFeedback } from '../components/feedback'
+import { useCalendar } from '../context/CalendarContext'
+import DateToggle from '../components/DateToggle'
+import { adToBs } from '../lib/nepaliCalendar'
 
 const emptyForm = {
   employeeName: '',
@@ -34,6 +37,7 @@ function toPayload(f) {
 export default function UnregisteredIds() {
   const fb = useFeedback()
   const { isAdmin } = useAuth()
+  const { isBs } = useCalendar()
 
   const [unregistered, setUnregistered] = useState([])
   const [departments, setDepartments] = useState([])
@@ -131,11 +135,19 @@ export default function UnregisteredIds() {
     {
       key: 'lastSeen',
       header: 'Last Seen',
-      render: (r) => (
-        <span className="text-slate-500">
-          {r.lastSeen ? new Date(r.lastSeen).toLocaleString() : '—'}
-        </span>
-      ),
+      render: (r) => {
+        if (!r.lastSeen) return '—'
+        const d = new Date(r.lastSeen)
+        if (isNaN(d.getTime())) return String(r.lastSeen)
+        const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        const isoDate = d.toISOString().slice(0, 10)
+        const bs = adToBs(isoDate)
+        return (
+          <span className="text-slate-600 font-medium">
+            {isBs && bs ? `${bs.dateBs} BS, ${time}` : `${isoDate} AD, ${time}`}
+          </span>
+        )
+      },
     },
     {
       key: 'actions',
@@ -155,7 +167,12 @@ export default function UnregisteredIds() {
       <PageHeader
         title="Unregistered Biometric IDs"
         subtitle="Biometric IDs found in device scan logs that do not belong to any employee record yet"
-        actions={<Button variant="secondary" onClick={loadData} disabled={loading}>↻ Refresh</Button>}
+        actions={
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={loadData} disabled={loading}>↻ Refresh</Button>
+            <DateToggle />
+          </div>
+        }
       />
 
       <Card className="mb-6 border-l-4 border-l-sky-500 p-4 text-sm text-slate-700">
@@ -212,7 +229,7 @@ export default function UnregisteredIds() {
               </Select>
             </Field>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Job Title">
                 <Input
                   value={form.title}
@@ -238,7 +255,7 @@ export default function UnregisteredIds() {
               />
             </Field>
 
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="sticky bottom-0 -mx-4 sm:-mx-6 -mb-4 sm:-mb-6 px-4 sm:px-6 py-3 bg-white/95 backdrop-blur-xs flex items-center justify-end gap-2 border-t border-slate-100 z-10">
               <Button type="button" variant="ghost" onClick={() => setTarget(null)}>
                 Cancel
               </Button>

@@ -151,12 +151,16 @@ namespace ZKAttendance.Infrastructure.Services.Devices
                 var punches = await reader.GetAttendanceLogsAsync(since);
 
                 // ── 4. Resolve biometric IDs to employees ──────────────────
-                // The device says "1017". Only EmployeeDevices knows that
-                // 1017 ON THIS DEVICE means Ramesh. The same 1017 on another
-                // device may be somebody else entirely.
+                // Check EmployeeDevices mapping first; fall back to matching
+                // Employees.BiometricUserId directly so registered employees attribute
+                // even without explicit per-device mapping rows.
                 var map = await db.EmployeeDevices
                     .Where(ed => ed.DeviceId == device.DeviceId && ed.IsActive)
                     .ToDictionaryAsync(ed => ed.BiometricUserId, ed => ed.EmployeeId, ct);
+
+                var directMap = await db.Employees
+                    .Where(e => e.IsActive && !string.IsNullOrEmpty(e.BiometricUserId))
+                    .ToDictionaryAsync(e => e.BiometricUserId, e => e.EmployeeId, ct);
 
                 // ── 5. Load what we already have, to skip the obvious repeats ──
                 var earliest = punches.Count > 0 ? punches.Min(p => p.PunchTime).Date : DateTime.Today;
@@ -194,6 +198,8 @@ namespace ZKAttendance.Infrastructure.Services.Devices
                     int? employeeId = null;
                     if (map.TryGetValue(p.BiometricUserId, out var id))
                         employeeId = id;
+                    else if (directMap.TryGetValue(p.BiometricUserId, out var directId))
+                        employeeId = directId;
                     else
                         unmapped++;
 
@@ -231,6 +237,23 @@ namespace ZKAttendance.Infrastructure.Services.Devices
                         "Unique index rejected duplicate punches for {Name}", device.DeviceName);
                     duplicates += inserted;
                     inserted = 0;
+                }
+
+                // Retroactively attribute any previously unmapped punches whose employees now exist
+                if (directMap.Count > 0)
+                {
+                    var unmappedLogs = await db.AttendanceLogs
+                        .Where(a => a.EmployeeId == null && directMap.Keys.Contains(a.BiometricUserId))
+                        .ToListAsync(ct);
+                    foreach (var u in unmappedLogs)
+                    {
+                        if (directMap.TryGetValue(u.BiometricUserId, out var mappedEmpId))
+                            u.EmployeeId = mappedEmpId;
+                    }
+                    if (unmappedLogs.Count > 0)
+                    {
+                        await db.SaveChangesAsync(ct);
+                    }
                 }
 
                 await reader.DisconnectAsync();

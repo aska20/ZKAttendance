@@ -1,4 +1,4 @@
-﻿using ZKAttendance.Domain.Entities;
+using ZKAttendance.Domain.Entities;
 using ZKAttendance.Application.Dtos;
 
 using ZKAttendance.Application.Abstractions;
@@ -116,7 +116,7 @@ namespace ZKAttendance.Application.Services.Attendances
                 return "Absent";
 
             if (checkOut == null || workingHours == 0)
-                return "Check-in Only";
+                return "Present";
 
             if (workingHours < 4)
                 return "Half Day";

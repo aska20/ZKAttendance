@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using ZKAttendance.Infrastructure.Persistence;
 using ZKAttendance.Application.Dtos.Reports;
 
@@ -79,14 +79,13 @@ namespace ZKAttendance.Infrastructure.Services.Report
                     item.LastCheckOut = attendance.LastCheckOut ??
                                        (attendance.LastRecord != attendance.FirstRecord ? attendance.LastRecord : null);
 
-                    if (item.FirstCheckIn.HasValue && item.LastCheckOut.HasValue)
+                    if (item.FirstCheckIn.HasValue)
                     {
-                        item.TotalWorkHours = item.LastCheckOut.Value - item.FirstCheckIn.Value;
                         item.Status = "Present";
-                    }
-                    else if (item.FirstCheckIn.HasValue && !item.LastCheckOut.HasValue)
-                    {
-                        item.Status = "No check-out";
+                        if (item.LastCheckOut.HasValue && item.LastCheckOut > item.FirstCheckIn)
+                        {
+                            item.TotalWorkHours = item.LastCheckOut.Value - item.FirstCheckIn.Value;
+                        }
                     }
                     else
                     {
@@ -111,7 +110,7 @@ namespace ZKAttendance.Infrastructure.Services.Report
                     .ThenBy(i => i.BiometricUserId)
                     .ToList(),
                 TotalEmployees = allEmployees.Count,
-                PresentCount = items.Count(i => i.Status == "Present" || i.Status == "No check-out"),
+                PresentCount = items.Count(i => i.Status == "Present"),
                 AbsentCount = items.Count(i => i.Status == "Absent")
             };
 
@@ -181,14 +180,13 @@ namespace ZKAttendance.Infrastructure.Services.Report
                     item.LastCheckOut = attendance.LastCheckOut ??
                                        (attendance.LastRecord != attendance.FirstRecord ? attendance.LastRecord : null);
 
-                    if (item.FirstCheckIn.HasValue && item.LastCheckOut.HasValue)
+                    if (item.FirstCheckIn.HasValue)
                     {
-                        item.TotalWorkHours = item.LastCheckOut.Value - item.FirstCheckIn.Value;
                         item.Status = "Present";
-                    }
-                    else if (item.FirstCheckIn.HasValue && !item.LastCheckOut.HasValue)
-                    {
-                        item.Status = "No check-out";
+                        if (item.LastCheckOut.HasValue && item.LastCheckOut > item.FirstCheckIn)
+                        {
+                            item.TotalWorkHours = item.LastCheckOut.Value - item.FirstCheckIn.Value;
+                        }
                     }
                     else
                     {
@@ -213,7 +211,7 @@ namespace ZKAttendance.Infrastructure.Services.Report
                     .ThenBy(i => i.BiometricUserId)
                     .ToList(),
                 TotalEmployees = allEmployees.Count,
-                PresentCount = items.Count(i => i.Status == "Present" || i.Status == "No check-out"),
+                PresentCount = items.Count(i => i.Status == "Present"),
                 AbsentCount = items.Count(i => i.Status == "Absent")
             };
 

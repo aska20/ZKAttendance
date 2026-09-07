@@ -19,6 +19,12 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Allow large request bodies for base-64 employee photo uploads (up to 10 MB).
+builder.WebHost.ConfigureKestrel(o =>
+{
+    o.Limits.MaxRequestBodySize = 10 * 1024 * 1024; // 10 MB
+});
+
 
 // ═══════════════════════════════════════════════════════
 // Controllers + JSON settings (API only — no Razor views)

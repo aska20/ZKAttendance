@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using System.Net.NetworkInformation;
 using ZKAttendance.Infrastructure.Persistence;
 
@@ -86,8 +86,9 @@ namespace ZKAttendance.Infrastructure.Services.Devices
 
                 if (reply.Status == IPStatus.Success)
                 {
-                    // Step 2: probe the port
-                    return await CheckTcpPortAsync(ipAddress, port);
+                    // Device is reachable. Do not open raw TCP on port 4370 because ZKTeco
+                    // terminals only allow one session; raw probes lock up the attendance daemon.
+                    return true;
                 }
             }
             catch

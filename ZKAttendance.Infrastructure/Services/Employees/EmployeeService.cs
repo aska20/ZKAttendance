@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using ZKAttendance.Infrastructure.Persistence;
 using ZKAttendance.Infrastructure.Persistence.Repositories;
 using ZKAttendance.Domain.Entities;
@@ -163,6 +163,17 @@ namespace ZKAttendance.Infrastructure.Services.Employees
 				var result = await _repository.AddAsync(employee);
 				_logger.LogInformation("Created employee: {EmployeeName}", employee.EmployeeName);
 
+				if (!string.IsNullOrWhiteSpace(result.BiometricUserId))
+				{
+					var unmapped = await _context.AttendanceLogs
+						.Where(a => a.BiometricUserId == result.BiometricUserId && a.EmployeeId == null)
+						.ToListAsync();
+					foreach (var p in unmapped)
+						p.EmployeeId = result.EmployeeId;
+					if (unmapped.Count > 0)
+						await _context.SaveChangesAsync();
+				}
+
 				return result;
 			}
 			catch (Exception ex)
@@ -192,6 +203,18 @@ namespace ZKAttendance.Infrastructure.Services.Employees
 				var result = await _repository.UpdateAsync(employee);
 
 				_logger.LogInformation("Updated employee: {EmployeeName}", employee.EmployeeName);
+
+				if (!string.IsNullOrWhiteSpace(result.BiometricUserId))
+				{
+					var unmapped = await _context.AttendanceLogs
+						.Where(a => a.BiometricUserId == result.BiometricUserId && a.EmployeeId == null)
+						.ToListAsync();
+					foreach (var p in unmapped)
+						p.EmployeeId = result.EmployeeId;
+					if (unmapped.Count > 0)
+						await _context.SaveChangesAsync();
+				}
+
 				return result;
 			}
 			catch (Exception ex)

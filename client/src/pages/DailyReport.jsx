@@ -4,8 +4,12 @@ import { apiErrorMessage } from '../lib/errors'
 import { PageHeader, Card, Table, Field, Input, Button, ErrorText, Badge } from '../components/ui'
 import { hm } from '../lib/dates'
 import DayDetailModal from '../components/DayDetailModal'
+import { useCalendar } from '../context/CalendarContext'
+import DateToggle from '../components/DateToggle'
+import NepaliDatePicker from '../components/NepaliDatePicker'
 
 export default function DailyReport() {
+  const { isBs } = useCalendar()
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [applied, setApplied] = useState(date)
   const [data, setData] = useState(null)
@@ -41,13 +45,25 @@ export default function DailyReport() {
     },
   ]
 
+  const subtitle = data
+    ? isBs
+      ? `${data.dateBs} BS`
+      : `${data.dateAd} AD`
+    : undefined
+
   return (
     <div>
-      <PageHeader title="Daily Report" subtitle={data ? `${data.dateBs} BS · ${data.dateAd}` : undefined} />
+      <PageHeader
+        title="Daily Report"
+        subtitle={subtitle}
+        actions={<DateToggle />}
+      />
 
       <Card className="mb-4 p-4">
         <form onSubmit={(e) => { e.preventDefault(); setApplied(date) }} className="flex items-end gap-3">
-          <Field label="Date"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+          <Field label="Date">
+            <NepaliDatePicker value={date} onChange={(v) => setDate(v)} />
+          </Field>
           <Button type="submit">Run</Button>
         </form>
       </Card>

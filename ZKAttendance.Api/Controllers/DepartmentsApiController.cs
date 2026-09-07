@@ -256,6 +256,7 @@ namespace ZKAttendance.Api.Controllers
         /// an enrol number would make their punches indistinguishable.
         /// </remarks>
         [HttpPost]
+        [DisableRequestSizeLimit]
         [ProducesResponseType(201)]
         [ProducesResponseType(typeof(ApiError), 400)]
         public async Task<IActionResult> Create([FromBody] EmployeeRequest request)
@@ -283,6 +284,7 @@ namespace ZKAttendance.Api.Controllers
                 Gender = request.Gender,
                 BirthDate = request.BirthDate,
                 HireDate = request.HireDate,
+                PhotoUrl = request.PhotoUrl,
                 CheckAttendance = request.CheckAttendance,
                 CheckLate = request.CheckLate,
                 CheckEarly = request.CheckEarly,
@@ -451,6 +453,7 @@ namespace ZKAttendance.Api.Controllers
 
         /// <summary>Update an employee.</summary>
         [HttpPut("{id:int}")]
+        [DisableRequestSizeLimit]
         [ProducesResponseType(200)]
         [ProducesResponseType(typeof(ApiError), 400)]
         [ProducesResponseType(typeof(ApiError), 404)]
@@ -480,6 +483,7 @@ namespace ZKAttendance.Api.Controllers
             existing.Gender = request.Gender;
             existing.BirthDate = request.BirthDate;
             existing.HireDate = request.HireDate;
+            existing.PhotoUrl = request.PhotoUrl;
             existing.CheckAttendance = request.CheckAttendance;
             existing.CheckLate = request.CheckLate;
             existing.CheckEarly = request.CheckEarly;
@@ -511,6 +515,22 @@ namespace ZKAttendance.Api.Controllers
 
             _logger.LogInformation("Employee {Id} deactivated through the API", id);
             return Ok(new { id, isActive = false, message = "Employee deactivated" });
+        }
+
+        /// <summary>Upload or clear an employee's profile photo (base-64 data-URL).</summary>
+        [HttpPatch("{id:int}/photo")]
+        [DisableRequestSizeLimit]
+        [ProducesResponseType(200)]
+        [ProducesResponseType(typeof(ApiError), 404)]
+        public async Task<IActionResult> UpdatePhoto(int id, [FromBody] PhotoRequest request)
+        {
+            var existing = await _employees.GetEmployeeByIdAsync(id);
+            if (existing is null)
+                return NotFound(ApiError.From($"Employee {id} not found"));
+            existing.PhotoUrl = request.PhotoUrl;
+            existing.ModifiedDate = DateTime.Now;
+            await _employees.UpdateEmployeeAsync(existing);
+            return Ok(new { id, photoUrl = existing.PhotoUrl });
         }
 
         /// <summary>
@@ -638,11 +658,17 @@ namespace ZKAttendance.Api.Controllers
             e.CheckHoliday,
             hireDate = e.HireDate,
             hireDateBs = e.HireDate.HasValue ? _nepali.ToBsString(e.HireDate.Value) : null,
+            e.PhotoUrl,
             e.IsActive,
             e.ApprovalStatus,
             hasLogin = login is not null,
             login
         };
+    }
+
+    public class PhotoRequest
+    {
+        public string? PhotoUrl { get; set; }
     }
 
     public class RejectRequest

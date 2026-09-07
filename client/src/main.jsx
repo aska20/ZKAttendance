@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
+import { CalendarProvider } from './context/CalendarContext.jsx'
 import { FeedbackProvider } from './components/feedback.jsx'
 
 createRoot(document.getElementById('root')).render(
@@ -11,7 +12,9 @@ createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <FeedbackProvider>
         <AuthProvider>
-          <App />
+          <CalendarProvider>
+            <App />
+          </CalendarProvider>
         </AuthProvider>
       </FeedbackProvider>
     </BrowserRouter>

@@ -88,11 +88,12 @@ namespace ZKAttendance.Api.Controllers
                 .FirstOrDefaultAsync();
 
             var recentLogs = await _context.AttendanceLogs
+                .Include(a => a.Employee).ThenInclude(e => e!.Department)
                 .Include(a => a.Branch)
                 .Include(a => a.Device)
                 .Where(a => a.AttendanceTime.Date == today)
                 .OrderByDescending(a => a.AttendanceTime)
-                .Take(10)
+                .Take(20)
                 .ToListAsync();
 
             var deviceErrors = await _context.DeviceErrors
@@ -129,6 +130,8 @@ namespace ZKAttendance.Api.Controllers
                     l.LogId,
                     l.EmployeeId,
                     l.BiometricUserId,
+                    employeeName = l.Employee?.EmployeeName,
+                    department = l.Employee?.Department?.DepartmentName,
                     branch = l.Branch?.BranchName,
                     device = l.Device?.DeviceName,
                     punchTimeAd = l.AttendanceTime,

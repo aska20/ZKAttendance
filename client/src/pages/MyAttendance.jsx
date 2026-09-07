@@ -3,6 +3,8 @@ import { attendance } from '../api/resources'
 import { apiErrorMessage } from '../lib/errors'
 import { PageHeader, Card, Table, Field, Select, ErrorText, Badge } from '../components/ui'
 import { ymd, hm } from '../lib/dates'
+import { useCalendar } from '../context/CalendarContext'
+import DateToggle from '../components/DateToggle'
 
 const QUICK = [
   ['last30days', 'Last 30 days'], ['last7days', 'Last 7 days'],
@@ -11,6 +13,7 @@ const QUICK = [
 ]
 
 export default function MyAttendance() {
+  const { isBs } = useCalendar()
   const [quickFilter, setQuickFilter] = useState('last30days')
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -25,7 +28,15 @@ export default function MyAttendance() {
   }, [quickFilter])
 
   const columns = [
-    { key: 'date', header: 'Date', render: (r) => <div><div>{r.nepaliDate} BS</div><div className="text-xs text-slate-400">{ymd(r.date)}</div></div> },
+    {
+      key: 'date',
+      header: 'Date',
+      render: (r) => (
+        <span className="font-medium text-slate-800">
+          {isBs ? `${r.nepaliDate} BS` : `${ymd(r.date)} AD`}
+        </span>
+      ),
+    },
     { key: 'in', header: 'In', render: (r) => r.checkInTime ? hm(r.checkInTime) : '—' },
     { key: 'out', header: 'Out', render: (r) => r.checkOutTime ? hm(r.checkOutTime) : '—' },
     { key: 'hours', header: 'Hours', render: (r) => r.workingHours?.toFixed(2) ?? '0' },
@@ -34,7 +45,7 @@ export default function MyAttendance() {
 
   return (
     <div>
-      <PageHeader title="My Attendance" />
+      <PageHeader title="My Attendance" actions={<DateToggle />} />
 
       {error && <ErrorText>{error}</ErrorText>}
 

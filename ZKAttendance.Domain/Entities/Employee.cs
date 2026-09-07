@@ -1,4 +1,4 @@
-﻿// Models/Employee.cs
+// Models/Employee.cs
 
 using System;
 using System.Collections.Generic;
@@ -45,6 +45,9 @@ namespace ZKAttendance.Domain.Entities
         public DateTime? BirthDate { get; set; }
 
         public DateTime? HireDate { get; set; }
+
+        /// <summary>Base-64 data-URL or absolute URL of the employee's profile photo.</summary>
+        public string? PhotoUrl { get; set; }
 
         public int? DepartmentId { get; set; }
 

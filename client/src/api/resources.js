@@ -48,6 +48,7 @@ export const employees = {
   approve: (id) => post(`/Employees/${id}/approve`),
   reject: (id, reason) => post(`/Employees/${id}/reject`, { reason }),
   createLogin: (id, b) => post(`/Employees/${id}/create-login`, b),
+  updatePhoto: (id, photoUrl) => api.patch(`/Employees/${id}/photo`, { photoUrl }).then(r => r.data),
 }
 
 // ── Notifications ────────────────────────────────────────────

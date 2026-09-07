@@ -71,7 +71,7 @@ namespace ZKAttendance.Infrastructure.Devices
         public async Task<bool> ConnectAsync(string ip, int port, int commPassword = 0)
         {
             _ip = ip;
-            if (commPassword != 0) _commPassword = commPassword;
+            _commPassword = commPassword;
             _tcp = new TcpClient { ReceiveTimeout = _timeoutMs, SendTimeout = _timeoutMs };
 
             using (var cts = new CancellationTokenSource(_timeoutMs))
@@ -198,22 +198,8 @@ namespace ZKAttendance.Infrastructure.Devices
             catch (Exception ex) { _logger.LogDebug(ex, "command {Cmd} failed (non-fatal)", command); }
         }
 
-        /// <summary>
-        /// Send one command packet and return (responseCode, payloadWithoutHeader).
-        /// The full declared TCP frame is always drained, so the payload is complete.
-        /// </summary>
-        private async Task<(int code, byte[] payload)> SendAsync(int command, byte[] data)
+        private async Task<(int code, byte[] payload)> ReadResponseAsync()
         {
-            if (_stream is null) throw new InvalidOperationException("Not connected");
-
-            var header = BuildCommandPacket(command, data);
-            var frame = new byte[8 + header.Length];
-            Buffer.BlockCopy(TcpTop, 0, frame, 0, 4);
-            BinaryPrimitives.WriteUInt32LittleEndian(frame.AsSpan(4), (uint)header.Length);
-            Buffer.BlockCopy(header, 0, frame, 8, header.Length);
-
-            await _stream.WriteAsync(frame);
-
             // Response: 8-byte TCP top (magic + declared length), then that many bytes.
             var top = await ReadExactAsync(8);
             if (top[0] != TcpTop[0] || top[1] != TcpTop[1] || top[2] != TcpTop[2] || top[3] != TcpTop[3])
@@ -231,19 +217,42 @@ namespace ZKAttendance.Infrastructure.Devices
             return (code, payload);
         }
 
+        /// <summary>
+        /// Send one command packet and return (responseCode, payloadWithoutHeader).
+        /// The full declared TCP frame is always drained, so the payload is complete.
+        /// </summary>
+        private async Task<(int code, byte[] payload)> SendAsync(int command, byte[] data)
+        {
+            if (_stream is null) throw new InvalidOperationException("Not connected");
+
+            var header = BuildCommandPacket(command, data);
+            var frame = new byte[8 + header.Length];
+            Buffer.BlockCopy(TcpTop, 0, frame, 0, 4);
+            BinaryPrimitives.WriteUInt32LittleEndian(frame.AsSpan(4), (uint)header.Length);
+            Buffer.BlockCopy(header, 0, frame, 8, header.Length);
+
+            await _stream.WriteAsync(frame);
+            return await ReadResponseAsync();
+        }
+
         private byte[] BuildCommandPacket(int command, byte[] data)
         {
-            _replyId = (_replyId + 1) & 0xFFFF;
-
             var buf = new byte[8 + data.Length];
             BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(0), (ushort)command);
             BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(2), 0); // checksum placeholder
             BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(4), (ushort)_sessionId);
             BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(6), (ushort)_replyId);
-            Buffer.BlockCopy(data, 0, buf, 8, data.Length);
+            if (data.Length > 0)
+                Buffer.BlockCopy(data, 0, buf, 8, data.Length);
 
             var checksum = Checksum(buf);
+
+            _replyId++;
+            if (_replyId >= USHRT_MAX)
+                _replyId -= USHRT_MAX;
+
             BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(2), checksum);
+            BinaryPrimitives.WriteUInt16LittleEndian(buf.AsSpan(6), (ushort)_replyId);
             return buf;
         }
 
@@ -320,11 +329,30 @@ namespace ZKAttendance.Infrastructure.Devices
                 BinaryPrimitives.WriteInt32LittleEndian(rdy.AsSpan(4), chunk);
 
                 var (cCode, cData) = await SendAsync(CMD_DATA_RDY, rdy);
-                if (cCode != CMD_DATA)
-                    throw new IOException($"Chunk read returned code {cCode}");
+                byte[] chunkPayload;
+                if (cCode == CMD_PREPARE_DATA)
+                {
+                    // In TCP mode, the device follows CMD_PREPARE_DATA with a CMD_DATA frame and then CMD_ACK_OK
+                    var (dCode, dData) = await ReadResponseAsync();
+                    if (dCode != CMD_DATA)
+                        throw new IOException($"Expected CMD_DATA in chunk read, got {dCode}");
+                    chunkPayload = dData;
 
-                var take = Math.Min(cData.Length, size - written);
-                Buffer.BlockCopy(cData, 0, result, written, take);
+                    var (ackCode, _) = await ReadResponseAsync();
+                    if (ackCode != CMD_ACK_OK)
+                        _logger.LogDebug("Chunk read ACK returned code {AckCode}", ackCode);
+                }
+                else if (cCode == CMD_DATA)
+                {
+                    chunkPayload = cData;
+                }
+                else
+                {
+                    throw new IOException($"Chunk read returned code {cCode}");
+                }
+
+                var take = Math.Min(chunkPayload.Length, size - written);
+                Buffer.BlockCopy(chunkPayload, 0, result, written, take);
                 written += take;
 
                 if (take == 0) break; // avoid a spin if the device stops sending
@@ -440,7 +468,7 @@ namespace ZKAttendance.Infrastructure.Devices
             var t = (byte)(ticks & 0xff);
             b[0] ^= t;
             b[1] ^= t;
-            // b[2] unchanged
+            b[2] = t;
             b[3] = (byte)(t ^ b[3]);
 
             return b;

@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { FaEdit } from 'react-icons/fa'
+import { RiDeleteBin5Line } from 'react-icons/ri'
 import { branches } from '../api/resources'
 import { useAsync } from '../hooks/useAsync'
 import { apiErrorMessage } from '../lib/errors'
@@ -58,10 +60,27 @@ export default function Branches() {
     { key: 'contactPerson', header: 'Contact', render: (r) => r.contactPerson || '—' },
     { key: 'isActive', header: 'Status', render: (r) => <Badge tone={r.isActive ? 'green' : 'slate'}>{r.isActive ? 'Active' : 'Inactive'}</Badge> },
     {
-      key: 'actions', header: '', render: (r) => (
-        <div className="text-right whitespace-nowrap">
-          <button onClick={() => openEdit(r)} className="text-sky-600 hover:underline">Edit</button>
-          <button onClick={() => remove(r)} className="ml-3 text-red-600 hover:underline">Delete</button>
+      key: 'actions',
+      header: 'Actions',
+      align: 'right',
+      render: (r) => (
+        <div className="flex items-center justify-end gap-1">
+          <button
+            type="button"
+            onClick={() => openEdit(r)}
+            title="Edit branch"
+            className="rounded p-1.5 text-slate-500 hover:bg-sky-50 hover:text-sky-600 transition-colors cursor-pointer"
+          >
+            <FaEdit className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => remove(r)}
+            title="Delete branch"
+            className="rounded p-1.5 text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors cursor-pointer"
+          >
+            <RiDeleteBin5Line className="h-4 w-4 text-red-500" />
+          </button>
         </div>
       ),
     },
@@ -77,7 +96,7 @@ export default function Branches() {
         <Modal title={editing.branchId ? 'Edit branch' : 'New branch'} onClose={() => setEditing(null)}>
           <form onSubmit={save} className="space-y-4">
             <ErrorText>{formError}</ErrorText>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Code" required>
                 <Input value={form.branchCode} onChange={(e) => setForm({ ...form, branchCode: e.target.value })} required />
               </Field>
@@ -91,7 +110,7 @@ export default function Branches() {
             <Field label="Address">
               <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
             </Field>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Contact person">
                 <Input value={form.contactPerson} onChange={(e) => setForm({ ...form, contactPerson: e.target.value })} />
               </Field>
@@ -103,7 +122,7 @@ export default function Branches() {
               <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
               Active
             </label>
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="sticky bottom-0 -mx-4 sm:-mx-6 -mb-4 sm:-mb-6 px-4 sm:px-6 py-3 bg-white/95 backdrop-blur-xs flex items-center justify-end gap-2 border-t border-slate-100 z-10">
               <Button type="button" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
               <Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
             </div>

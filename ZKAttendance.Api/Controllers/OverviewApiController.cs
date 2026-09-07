@@ -61,7 +61,7 @@ namespace ZKAttendance.Api.Controllers
                 .ToDictionary(g => g.Key, g => g.First());
 
             var days = new List<DayCell>();
-            for (var d = start; d <= end; d = d.AddDays(1))
+            for (var d = end; d >= start; d = d.AddDays(-1))
             {
                 var weeklyOff = _nepali.IsWeeklyOff(d);
                 var named = holidayByDate.TryGetValue(d, out var h);
@@ -98,18 +98,28 @@ namespace ZKAttendance.Api.Controllers
                 .ToListAsync();
 
             var empIds = employees.Select(e => e.EmployeeId).ToList();
+            var biometricMap = employees
+                .Where(e => !string.IsNullOrWhiteSpace(e.BiometricUserId))
+                .ToDictionary(e => e.BiometricUserId, e => e.EmployeeId);
 
             // ── punches for the whole window, one query ─────────────────
             var logs = await _db.AttendanceLogs
-                .Where(a => a.EmployeeId != null
-                            && empIds.Contains(a.EmployeeId!.Value)
+                .Where(a => ((a.EmployeeId != null && empIds.Contains(a.EmployeeId!.Value))
+                             || (a.EmployeeId == null && biometricMap.Keys.Contains(a.BiometricUserId)))
                             && a.AttendanceTime >= start
                             && a.AttendanceTime < end.AddDays(1))
-                .Select(a => new { a.EmployeeId, a.AttendanceTime })
+                .Select(a => new { a.EmployeeId, a.BiometricUserId, a.AttendanceTime })
                 .ToListAsync();
 
             var byEmpDay = logs
-                .GroupBy(a => new { EmployeeId = a.EmployeeId!.Value, Day = a.AttendanceTime.Date })
+                .Select(a => new
+                {
+                    EmployeeId = a.EmployeeId ?? (biometricMap.TryGetValue(a.BiometricUserId, out var eid) ? eid : 0),
+                    Day = a.AttendanceTime.Date,
+                    a.AttendanceTime
+                })
+                .Where(x => x.EmployeeId != 0)
+                .GroupBy(a => new { a.EmployeeId, a.Day })
                 .ToDictionary(
                     g => (g.Key.EmployeeId, g.Key.Day),
                     g => g.Select(x => x.AttendanceTime).OrderBy(t => t).ToList());

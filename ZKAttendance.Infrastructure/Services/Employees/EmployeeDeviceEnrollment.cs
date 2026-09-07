@@ -79,6 +79,13 @@ namespace ZKAttendance.Infrastructure.Services.Employees
 
                 _context.EmployeeDevices.Add(link);
                 result.Add(new DeviceAssignment(deviceId, deviceUserId, link.IsEnrolled));
+
+                // Retroactively attribute previous unmapped punches for this biometric user on this device
+                var unmapped = await _context.AttendanceLogs
+                    .Where(a => a.DeviceId == deviceId && a.BiometricUserId == deviceUserId && a.EmployeeId == null)
+                    .ToListAsync(ct);
+                foreach (var p in unmapped)
+                    p.EmployeeId = employeeId;
             }
 
             await _context.SaveChangesAsync(ct);

@@ -5,6 +5,8 @@ import { apiErrorMessage } from '../lib/errors'
 import { useAuth } from '../context/AuthContext'
 import { PageHeader, Card, Button, Table, Modal, Field, Input, Select, ErrorText, Badge } from '../components/ui'
 import { useFeedback } from '../components/feedback'
+import { FaEdit } from 'react-icons/fa'
+import { FiWifi, FiRefreshCw, FiPower } from 'react-icons/fi'
 
 const empty = {
   deviceName: '', deviceIP: '', devicePort: 4370, serialNumber: '',
@@ -22,7 +24,7 @@ export default function Devices() {
   const [form, setForm] = useState(empty)
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
-  const [busyId, setBusyId] = useState(null)
+  const [busyState, setBusyState] = useState(null)
 
   const list = data?.devices || []
   const branchList = data?.branches || []
@@ -59,8 +61,8 @@ export default function Devices() {
     }
   }
 
-  async function act(d, fn, label) {
-    setBusyId(d.deviceId)
+  async function act(d, fn, label, actionType) {
+    setBusyState({ id: d.deviceId, action: actionType })
     try {
       const res = await fn(d.deviceId)
       fb.success(`${d.deviceName}: ${res.message ?? label + ' done'}`)
@@ -68,8 +70,19 @@ export default function Devices() {
     } catch (err) {
       fb.error(`${d.deviceName}: ${apiErrorMessage(err)}`)
     } finally {
-      setBusyId(null)
+      setBusyState(null)
     }
+  }
+
+  async function deactivateDevice(d) {
+    const ok = await fb.confirm({
+      title: 'Deactivate device',
+      message: `Are you sure you want to deactivate "${d.deviceName}"?`,
+      confirmText: 'Deactivate',
+      danger: true,
+    })
+    if (!ok) return
+    act(d, devices.deactivate, 'Deactivate', 'deactivate')
   }
 
   const columns = [
@@ -86,16 +99,66 @@ export default function Devices() {
       ),
     },
     ...(isAdmin ? [{
-      key: 'actions', header: '', render: (r) => (
-        <div className="text-right whitespace-nowrap text-xs">
-          <button disabled={busyId === r.deviceId} onClick={() => act(r, devices.testConnection, 'Test')} className="text-slate-600 hover:underline">Test</button>
-          <button disabled={busyId === r.deviceId} onClick={() => act(r, devices.sync, 'Sync')} className="ml-2 text-slate-600 hover:underline">Sync</button>
-          <button onClick={() => openEdit(r)} className="ml-2 text-sky-600 hover:underline">Edit</button>
-          {r.isActive && (
-            <button disabled={busyId === r.deviceId} onClick={() => act(r, devices.deactivate, 'Deactivate')} className="ml-2 text-red-600 hover:underline">Deactivate</button>
-          )}
-        </div>
-      ),
+      key: 'actions',
+      header: 'Actions',
+      align: 'right',
+      render: (r) => {
+        const isBusy = busyState?.id === r.deviceId
+        const isSyncing = isBusy && busyState?.action === 'sync'
+        const isTesting = isBusy && busyState?.action === 'test'
+
+        return (
+          <div className="flex items-center justify-end gap-1">
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => act(r, devices.testConnection, 'Test', 'test')}
+              title={isTesting ? 'Testing connection…' : 'Test connection'}
+              className={`rounded p-1.5 transition-colors cursor-pointer ${
+                isTesting
+                  ? 'bg-amber-50 text-amber-600 cursor-wait'
+                  : 'text-slate-500 hover:bg-amber-50 hover:text-amber-600 disabled:opacity-40 disabled:cursor-not-allowed'
+              }`}
+            >
+              <FiWifi className={`h-4 w-4 ${isTesting ? 'animate-pulse' : ''}`} />
+            </button>
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => act(r, devices.sync, 'Sync', 'sync')}
+              title={isSyncing ? 'Syncing device…' : 'Sync device'}
+              className={`inline-flex items-center gap-1.5 rounded p-1.5 transition-colors cursor-pointer ${
+                isSyncing
+                  ? 'bg-sky-50 text-sky-600 ring-1 ring-sky-200 cursor-wait px-2'
+                  : 'text-slate-500 hover:bg-sky-50 hover:text-sky-600 disabled:opacity-40 disabled:cursor-not-allowed'
+              }`}
+            >
+              <FiRefreshCw className={`h-4 w-4 ${isSyncing ? 'animate-spin text-sky-600' : ''}`} />
+              {isSyncing && <span className="text-xs font-medium">Syncing…</span>}
+            </button>
+            <button
+              type="button"
+              disabled={isBusy}
+              onClick={() => openEdit(r)}
+              title="Edit device"
+              className="rounded p-1.5 text-slate-500 hover:bg-sky-50 hover:text-sky-600 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <FaEdit className="h-4 w-4" />
+            </button>
+            {r.isActive && (
+              <button
+                type="button"
+                disabled={isBusy}
+                onClick={() => deactivateDevice(r)}
+                title="Deactivate device"
+                className="rounded p-1.5 text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <FiPower className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        )
+      },
     }] : []),
   ]
 
@@ -121,11 +184,11 @@ export default function Devices() {
           <form onSubmit={save} className="space-y-4">
             <ErrorText>{formError}</ErrorText>
             <Field label="Name" required><Input {...nf('deviceName')} required /></Field>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="IP address" required><Input {...nf('deviceIP')} required /></Field>
               <Field label="Port"><Input type="number" {...nf('devicePort')} /></Field>
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Field label="Serial number"><Input {...nf('serialNumber')} /></Field>
               <Field label="Model"><Input {...nf('deviceModel')} /></Field>
               <Field label="Comm password" hint="Blank = none">
@@ -140,7 +203,7 @@ export default function Devices() {
                 />
               </Field>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Field label="Branch" required>
                 <Select {...nf('branchId')} required>
                   <option value="">Select branch</option>
@@ -158,7 +221,7 @@ export default function Devices() {
               <input type="checkbox" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
               Active
             </label>
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="sticky bottom-0 -mx-4 sm:-mx-6 -mb-4 sm:-mb-6 px-4 sm:px-6 py-3 bg-white/95 backdrop-blur-xs flex items-center justify-end gap-2 border-t border-slate-100 z-10">
               <Button type="button" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
               <Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save'}</Button>
             </div>
