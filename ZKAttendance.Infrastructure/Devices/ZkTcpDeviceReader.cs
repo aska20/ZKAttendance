@@ -44,6 +44,7 @@ namespace ZKAttendance.Infrastructure.Devices
         private const int CMD_OPTIONS_RRQ = 11;
         private const int CMD_ATTLOG_RRQ = 13;
         private const int CMD_USER_WRQ = 8;
+        private const int CMD_DB_RRQ = 7;
         private const int CMD_USERTEMP_RRQ = 9;
         private const int CMD_USERTEMP_WRQ = 10;
         private const int CMD_DELETE_USER = 18;
@@ -108,24 +109,40 @@ namespace ZKAttendance.Infrastructure.Devices
             _replyId = USHRT_MAX - 1;
             _uidCache.Clear();
 
-            var (code, payload) = await SendAsync(CMD_CONNECT, Array.Empty<byte>());
-
-            if (code == CMD_ACK_UNAUTH)
+            // The handshake needs the same protection as the dial. A terminal
+            // that accepts the socket and then goes quiet - wrong port, firewall,
+            // half-open link, or another operator already mid-scan on it - used
+            // to throw out of here and surface to the caller as a bare 500.
+            // A device we cannot talk to is a false return, not an exception.
+            try
             {
-                _logger.LogInformation("Device {Ip} requires a comm key; authenticating", ip);
-                var key = MakeCommKey(_commPassword, _sessionId);
-                (code, payload) = await SendAsync(CMD_AUTH, key);
+                var (code, payload) = await SendAsync(CMD_CONNECT, Array.Empty<byte>());
+
+                if (code == CMD_ACK_UNAUTH)
+                {
+                    _logger.LogInformation("Device {Ip} requires a comm key; authenticating", ip);
+                    var key = MakeCommKey(_commPassword, _sessionId);
+                    (code, payload) = await SendAsync(CMD_AUTH, key);
+                }
+
+                if (code != CMD_ACK_OK)
+                {
+                    _logger.LogWarning(
+                        "Device {Ip} refused the connection (code {Code}). A wrong comm key is the usual cause.",
+                        ip, code);
+                    await DisconnectAsync();
+                    return false;
+                }
+
+                _ = payload;
+                return true;
             }
-
-            if (code != CMD_ACK_OK)
+            catch (Exception ex)
             {
-                _logger.LogWarning("Device {Ip} refused the connection (code {Code})", ip, code);
+                _logger.LogWarning(ex, "Handshake with {Ip}:{Port} failed", ip, port);
                 await DisconnectAsync();
                 return false;
             }
-
-            _ = payload;
-            return true;
         }
 
         public async Task DisconnectAsync()
@@ -221,7 +238,9 @@ namespace ZKAttendance.Infrastructure.Devices
             await SafeSendAsync(CMD_DISABLEDEVICE);
             try
             {
-                var buffer = await ReadWithBufferAsync(CMD_DATA_WRRQ, FCT_USER);
+                // CMD_USERTEMP_RRQ is the command being buffer-read; the transport
+                // command (CMD_DATA_WRRQ) is applied inside ReadWithBufferAsync.
+                var buffer = await ReadWithBufferAsync(CMD_USERTEMP_RRQ, FCT_USER);
 
                 // Parsing lives in a synchronous helper: Span<byte> cannot be a
                 // local in an async method, and copying the buffer just to keep
@@ -460,7 +479,7 @@ namespace ZKAttendance.Infrastructure.Devices
             await SafeSendAsync(CMD_DISABLEDEVICE);
             try
             {
-                var buffer = await ReadWithBufferAsync(CMD_DATA_WRRQ, FCT_FINGERTMP);
+                var buffer = await ReadWithBufferAsync(CMD_DB_RRQ, FCT_FINGERTMP);
                 var result = ParseTemplates(buffer, byUid, biometricUserId);
 
                 _logger.LogInformation(
@@ -653,7 +672,33 @@ namespace ZKAttendance.Infrastructure.Devices
         {
             if (_uidCache.TryGetValue(biometricUserId, out var cached)) return cached;
 
-            var users = await GetUsersAsync();
+            List<DeviceUser> users;
+            try
+            {
+                users = await GetUsersAsync();
+            }
+            catch (Exception ex)
+            {
+                // Some firmware refuses a bulk user-table read. Without the table
+                // we cannot see which slots are taken, but an enrol number that is
+                // numeric almost always maps to the same slot on ZK hardware, so
+                // fall back to that rather than failing enrolment outright.
+                if (!allocateIfMissing) throw;
+
+                if (int.TryParse(biometricUserId, out var numeric) && numeric is > 0 and <= 65534)
+                {
+                    _logger.LogWarning(ex,
+                        "Could not read the user table from {Ip}; assuming slot {Uid} for enrol number {Id}",
+                        _ip, numeric, biometricUserId);
+                    _uidCache[biometricUserId] = numeric;
+                    return numeric;
+                }
+
+                throw new IOException(
+                    $"The user table on {_ip} could not be read, and enrol number '{biometricUserId}' " +
+                    "is not numeric, so no device slot can be worked out. Enrol this person on the terminal directly.", ex);
+            }
+
             foreach (var u in users) _uidCache[u.BiometricUserId] = u.Uid;
 
             if (_uidCache.TryGetValue(biometricUserId, out var found)) return found;
@@ -801,7 +846,9 @@ namespace ZKAttendance.Infrastructure.Devices
                 return payload; // small result, delivered inline
 
             if (code != CMD_ACK_OK && code != CMD_PREPARE_DATA)
-                throw new IOException($"Device did not accept the buffered read (code {code})");
+                throw new IOException(
+                    $"Device refused a buffered read of command {command} (reply code {code}). " +
+                    "This firmware may not support bulk reads for that table.");
 
             if (payload.Length < 5)
                 throw new IOException("Device announced a buffered read with no size");

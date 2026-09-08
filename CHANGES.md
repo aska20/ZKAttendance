@@ -230,6 +230,76 @@ template table, and completes a "scan" about 6 seconds after enrolment starts.
 
 ---
 
+## Fix: 500 on "Register on ZKTeco"
+
+The enrolment path did all its device I/O outside any exception handling, so anything the terminal
+threw came back to the browser as a bare 500 with no explanation. Three separate holes:
+
+1. **`ZkTcpDeviceReader.ConnectAsync`** guarded the TCP dial but not the protocol handshake that
+   follows it. A terminal that accepts the socket and then goes quiet — wrong port, firewall,
+   half-open link, or another operator already mid-scan — threw straight out. Now returns `false`.
+2. **`StartEnrollmentAsync`** called `ConnectAsync`, `GetUsersAsync` and `SetUserAsync` with no
+   try/catch at all. Now wrapped; a device failure comes back as a reported result carrying the
+   reason. Same for `CancelEnrollmentAsync` (best-effort, never throws) and the master template pull
+   in `PullAndPropagateAsync`.
+3. **`EnrollmentApiController`** caught only `InvalidOperationException`; everything else fell
+   through to a 500. Every endpoint now also catches broadly, logs, and returns **502** with the
+   reason instead.
+
+Also added: an employee with no biometric / enrol number is now rejected with a plain message rather
+than being sent to the terminal, where it produced an opaque protocol error.
+
+**What you will see now instead of a 500:**
+
+| Situation | Response |
+|---|---|
+| Terminal unplugged or wrong IP | `Could not reach <name> at <ip>:<port>. Check the terminal is powered on, on the same network, and that the comm key matches.` |
+| No device registered / none active | 400 — `No active device is registered, so there is nowhere to enrol.` |
+| Employee has no enrol number | `<name> has no biometric / enrol number... Set one on the employee first.` |
+| Terminal refuses or times out | 502 with the device's own reason |
+
+## Fix: "Device did not accept the buffered read (code 4989)"
+
+This was my bug, and it was the real blocker behind the 500.
+
+`ReadWithBufferAsync(command, fct, ext)` takes the command **being read** as its first argument;
+the transport command (`CMD_DATA_WRRQ`, 1503) is applied inside the method. The existing attendance
+read gets this right:
+
+```csharp
+await ReadWithBufferAsync(CMD_ATTLOG_RRQ);      // 13 - correct
+```
+
+My two new call sites passed the transport command as the inner command:
+
+```csharp
+await ReadWithBufferAsync(CMD_DATA_WRRQ, FCT_USER);        // asked the device to buffer-read 1503
+await ReadWithBufferAsync(CMD_DATA_WRRQ, FCT_FINGERTMP);   // same
+```
+
+The terminal was asked to bulk-read command 1503, which means nothing, and replied with the
+nonsense code 4989. Corrected to:
+
+```csharp
+await ReadWithBufferAsync(CMD_USERTEMP_RRQ, FCT_USER);     // 9
+await ReadWithBufferAsync(CMD_DB_RRQ, FCT_FINGERTMP);      // 7  (constant added)
+```
+
+### Three knock-on fixes
+
+- **"offline" was a lie.** The terminal had answered — it just refused that read. The panel now
+  separates *cannot connect* from *connected but will not list its users*, so nobody goes checking
+  network cables over a firmware limitation.
+- **Registration no longer depends on listing users first.** Writing a user record is idempotent
+  (the terminal overwrites the slot rather than duplicating it), so when the table cannot be listed
+  it is now written unconditionally. Listing is an optimisation, not a precondition.
+- **`ResolveUidAsync` has a fallback.** With no readable table there is no way to see which slots
+  are free; for a numeric enrol number it now assumes the matching slot, which is the near-universal
+  ZK convention, and logs that it did so.
+
+The buffered-read error message now names the command and reply code, so the next failure of this
+kind is diagnosable at a glance instead of being an opaque number.
+
 ## Still open
 
 - **Leave types** — not started.

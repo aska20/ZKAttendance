@@ -235,7 +235,7 @@ namespace ZKAttendance.Api.Controllers
                             // 4. Present. First in / last out is the summary; the
                             //    punch count tells the UI there is more to see.
                             var firstIn = times!.First();
-                            var lastOut = times!.Count > 1 ? times!.Last() : (DateTime?)null;
+                            var lastOut = times.Count > 1 ? times.Last() : (DateTime?)null;
                             var hours = lastOut is { } lo ? Math.Round((lo - firstIn).TotalHours, 2) : 0.0;
 
                             var status = hours > 0 && hours < HalfDayUnderHours ? "Half Day" : "Present";

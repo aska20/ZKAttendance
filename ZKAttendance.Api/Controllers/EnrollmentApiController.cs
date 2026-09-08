@@ -61,7 +61,17 @@ namespace ZKAttendance.Api.Controllers
             }
             catch (InvalidOperationException ex)
             {
+                // Something the operator can fix: no device, no master, no employee.
                 return BadRequest(ApiError.From(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                // A terminal that is unplugged, busy, or answering slowly is a
+                // device condition, not a server fault. Returning 502 with the
+                // reason is far more use than an unexplained 500.
+                _logger.LogError(ex, "Enrolment call failed for employee {Id}", employeeId);
+                return StatusCode(502, ApiError.From(
+                    $"The biometric terminal could not be reached or refused the request: {ex.Message}"));
             }
         }
 
@@ -83,7 +93,17 @@ namespace ZKAttendance.Api.Controllers
             }
             catch (InvalidOperationException ex)
             {
+                // Something the operator can fix: no device, no master, no employee.
                 return BadRequest(ApiError.From(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                // A terminal that is unplugged, busy, or answering slowly is a
+                // device condition, not a server fault. Returning 502 with the
+                // reason is far more use than an unexplained 500.
+                _logger.LogError(ex, "Enrolment call failed for employee {Id}", employeeId);
+                return StatusCode(502, ApiError.From(
+                    $"The biometric terminal could not be reached or refused the request: {ex.Message}"));
             }
         }
 
@@ -91,10 +111,8 @@ namespace ZKAttendance.Api.Controllers
         /// Put a terminal into registration mode for this employee. Defaults to
         /// the master device.
         /// </summary>
-        /// <param name="employeeId">The employee being enrolled.</param>
         /// <param name="deviceId">Which terminal. Omit for the master.</param>
         /// <param name="fingerIndex">0-9. Ignored by face/palm units.</param>
-        /// <param name="ct">Request cancellation token.</param>
         [HttpPost("start")]
         [ProducesResponseType(200)]
         [ProducesResponseType(typeof(ApiError), 400)]
@@ -117,7 +135,17 @@ namespace ZKAttendance.Api.Controllers
             }
             catch (InvalidOperationException ex)
             {
+                // Something the operator can fix: no device, no master, no employee.
                 return BadRequest(ApiError.From(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                // A terminal that is unplugged, busy, or answering slowly is a
+                // device condition, not a server fault. Returning 502 with the
+                // reason is far more use than an unexplained 500.
+                _logger.LogError(ex, "Enrolment call failed for employee {Id}", employeeId);
+                return StatusCode(502, ApiError.From(
+                    $"The biometric terminal could not be reached or refused the request: {ex.Message}"));
             }
         }
 
@@ -127,8 +155,18 @@ namespace ZKAttendance.Api.Controllers
         public async Task<IActionResult> Cancel(
             int employeeId, [FromQuery] int? deviceId, CancellationToken ct)
         {
-            var ok = await _orchestrator.CancelEnrollmentAsync(employeeId, deviceId, ct);
-            return Ok(new { employeeId, cancelled = ok });
+            try
+            {
+                var ok = await _orchestrator.CancelEnrollmentAsync(employeeId, deviceId, ct);
+                return Ok(new { employeeId, cancelled = ok });
+            }
+            catch (Exception ex)
+            {
+                // Cancelling is best-effort — the terminal releases itself on a
+                // timeout anyway, so never fail the caller over it.
+                _logger.LogDebug(ex, "Cancel failed for employee {Id}", employeeId);
+                return Ok(new { employeeId, cancelled = false });
+            }
         }
 
         /// <summary>
@@ -150,7 +188,17 @@ namespace ZKAttendance.Api.Controllers
             }
             catch (InvalidOperationException ex)
             {
+                // Something the operator can fix: no device, no master, no employee.
                 return BadRequest(ApiError.From(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                // A terminal that is unplugged, busy, or answering slowly is a
+                // device condition, not a server fault. Returning 502 with the
+                // reason is far more use than an unexplained 500.
+                _logger.LogError(ex, "Enrolment call failed for employee {Id}", employeeId);
+                return StatusCode(502, ApiError.From(
+                    $"The biometric terminal could not be reached or refused the request: {ex.Message}"));
             }
         }
     }
@@ -164,9 +212,15 @@ namespace ZKAttendance.Api.Controllers
     public class DeviceProvisioningApiController : ControllerBase
     {
         private readonly IDeviceEnrollmentOrchestrator _orchestrator;
+        private readonly ILogger<DeviceProvisioningApiController> _logger;
 
-        public DeviceProvisioningApiController(IDeviceEnrollmentOrchestrator orchestrator)
-            => _orchestrator = orchestrator;
+        public DeviceProvisioningApiController(
+            IDeviceEnrollmentOrchestrator orchestrator,
+            ILogger<DeviceProvisioningApiController> logger)
+        {
+            _orchestrator = orchestrator;
+            _logger = logger;
+        }
 
         /// <summary>
         /// Fill a newly registered terminal from the templates already cached in
@@ -192,7 +246,17 @@ namespace ZKAttendance.Api.Controllers
             }
             catch (InvalidOperationException ex)
             {
+                // Something the operator can fix: no device, no master, no employee.
                 return BadRequest(ApiError.From(ex.Message));
+            }
+            catch (Exception ex)
+            {
+                // A terminal that is unplugged, busy, or answering slowly is a
+                // device condition, not a server fault. Returning 502 with the
+                // reason is far more use than an unexplained 500.
+                _logger.LogError(ex, "Provisioning device {Id} failed", deviceId);
+                return StatusCode(502, ApiError.From(
+                    $"The terminal could not be provisioned: {ex.Message}"));
             }
         }
 
@@ -201,8 +265,16 @@ namespace ZKAttendance.Api.Controllers
         [ProducesResponseType(200)]
         public async Task<IActionResult> ReconcileAll(CancellationToken ct)
         {
-            var repaired = await _orchestrator.ReconcileAllAsync(ct);
-            return Ok(new { repaired });
+            try
+            {
+                var repaired = await _orchestrator.ReconcileAllAsync(ct);
+                return Ok(new { repaired });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Reconcile-all failed");
+                return StatusCode(502, ApiError.From($"Reconciliation failed: {ex.Message}"));
+            }
         }
     }
 }

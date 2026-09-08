@@ -73,23 +73,44 @@ namespace ZKAttendance.Infrastructure.Services.Devices
                         Message: "Could not reach the terminal.");
                 }
 
-                var users = await reader.GetUsersAsync();
-                var onDevice = users.Any(u => u.BiometricUserId == enrolNumber);
+                // The terminal answered, so it is online whatever happens next.
+                // A firmware that will not do a bulk table read is a capability
+                // limit, not a connectivity problem, and must not be reported as
+                // "offline" - that sends people off checking network cables.
+                bool onDevice;
+                int templateCount;
+                string? note = null;
 
-                var templates = onDevice
-                    ? await reader.GetTemplatesAsync(enrolNumber)
-                    : new List<FingerTemplate>();
+                try
+                {
+                    var users = await reader.GetUsersAsync();
+                    onDevice = users.Any(u => u.BiometricUserId == enrolNumber);
+
+                    var templates = onDevice
+                        ? await reader.GetTemplatesAsync(enrolNumber)
+                        : new List<FingerTemplate>();
+                    templateCount = templates.Count;
+
+                    note = !onDevice
+                        ? "Not on this terminal yet."
+                        : templateCount == 0
+                            ? "User created, no finger enrolled here yet."
+                            : null;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex,
+                        "Connected to {Device} but could not read its user table", device.DeviceName);
+                    onDevice = false;
+                    templateCount = 0;
+                    note = "Connected, but this firmware will not list its users. Registration still works.";
+                }
 
                 await reader.DisconnectAsync();
 
                 return new DeviceEnrollmentState(
                     device.DeviceId, device.DeviceName, device.Role.ToString(), device.IsActive,
-                    Reachable: true, enrolNumber, onDevice, templates.Count,
-                    Message: !onDevice
-                        ? "Not on this terminal yet."
-                        : templates.Count == 0
-                            ? "User created, no finger enrolled here yet."
-                            : null);
+                    Reachable: true, enrolNumber, onDevice, templateCount, note);
             }
             catch (Exception ex)
             {
@@ -175,22 +196,47 @@ namespace ZKAttendance.Infrastructure.Services.Devices
             var links = await LinksAsync(employeeId, ct);
             var enrolNumber = EnrolNumberFor(links, device.DeviceId, employee);
 
-            using var reader = _readerFactory();
-
-            if (!await reader.ConnectAsync(device.DeviceIP, device.DevicePort, device.CommPassword))
+            // A person with no enrol number cannot be enrolled anywhere, and the
+            // terminal's answer to being asked is an unhelpful protocol error.
+            // Say so plainly instead.
+            if (string.IsNullOrWhiteSpace(enrolNumber))
             {
-                return new StartEnrollmentResult(false, device.DeviceId, device.DeviceName, enrolNumber, fingerIndex,
-                    $"Could not reach {device.DeviceName} at {device.DeviceIP}. Check the terminal is powered on and on the network.");
+                return new StartEnrollmentResult(false, device.DeviceId, device.DeviceName, "", fingerIndex,
+                    $"{employee.EmployeeName} has no biometric / enrol number, so there is nothing for the terminal to register against. Set one on the employee first.");
             }
+
+            using var reader = _readerFactory();
 
             try
             {
+                if (!await reader.ConnectAsync(device.DeviceIP, device.DevicePort, device.CommPassword))
+                {
+                    return new StartEnrollmentResult(false, device.DeviceId, device.DeviceName, enrolNumber, fingerIndex,
+                        $"Could not reach {device.DeviceName} at {device.DeviceIP}:{device.DevicePort}. Check the terminal is powered on, on the same network, and that the comm key matches.");
+                }
+
                 // The terminal will refuse to enrol against a user it has never
                 // heard of, so create the record first. This is also what makes
                 // the person's name appear on the terminal's display while they
                 // are standing at it.
-                var users = await reader.GetUsersAsync();
-                if (!users.Any(u => u.BiometricUserId == enrolNumber))
+                // Writing the user is idempotent - the terminal overwrites the
+                // slot rather than duplicating it - so when the user table
+                // cannot be listed, just write unconditionally instead of
+                // giving up. Listing is an optimisation, not a precondition.
+                var alreadyThere = false;
+                try
+                {
+                    var users = await reader.GetUsersAsync();
+                    alreadyThere = users.Any(u => u.BiometricUserId == enrolNumber);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex,
+                        "Could not list users on {Device}; writing the user record anyway",
+                        device.DeviceName);
+                }
+
+                if (!alreadyThere)
                 {
                     if (!await reader.SetUserAsync(enrolNumber, employee.EmployeeName))
                     {
@@ -209,9 +255,19 @@ namespace ZKAttendance.Infrastructure.Services.Devices
                         ? $"{device.DeviceName} is now showing the registration screen for {employee.EmployeeName} (enrol number {enrolNumber}). Ask them to scan now."
                         : result.Message);
             }
+            catch (Exception ex)
+            {
+                // Anything the terminal throws at us is a device problem, not a
+                // server fault. Report it as a failed start with the reason.
+                _logger.LogWarning(ex, "Enrolment start failed on {Device} for employee {Id}",
+                    device.DeviceName, employeeId);
+
+                return new StartEnrollmentResult(false, device.DeviceId, device.DeviceName, enrolNumber, fingerIndex,
+                    $"{device.DeviceName} did not accept the request: {ex.Message}");
+            }
             finally
             {
-                await reader.DisconnectAsync();
+                try { await reader.DisconnectAsync(); } catch { /* already gone */ }
             }
         }
 
@@ -220,10 +276,22 @@ namespace ZKAttendance.Infrastructure.Services.Devices
         {
             var device = await ResolveEnrolmentDeviceAsync(deviceId, ct);
             using var reader = _readerFactory();
-            if (!await reader.ConnectAsync(device.DeviceIP, device.DevicePort, device.CommPassword))
+            try
+            {
+                if (!await reader.ConnectAsync(device.DeviceIP, device.DevicePort, device.CommPassword))
+                    return false;
+                return await reader.CancelCaptureAsync();
+            }
+            catch (Exception ex)
+            {
+                // Cancelling is best-effort; the terminal times out on its own.
+                _logger.LogDebug(ex, "Cancel on {Device} failed (non-fatal)", device.DeviceName);
                 return false;
-            try { return await reader.CancelCaptureAsync(); }
-            finally { await reader.DisconnectAsync(); }
+            }
+            finally
+            {
+                try { await reader.DisconnectAsync(); } catch { /* already gone */ }
+            }
         }
 
         // ── pull from master, push to the rest ──────────────────────────
@@ -246,13 +314,28 @@ namespace ZKAttendance.Infrastructure.Services.Devices
 
             using (var reader = _readerFactory())
             {
-                if (!await reader.ConnectAsync(master.DeviceIP, master.DevicePort, master.CommPassword))
-                    throw new InvalidOperationException($"Could not reach the master terminal {master.DeviceName}.");
                 try
                 {
+                    if (!await reader.ConnectAsync(master.DeviceIP, master.DevicePort, master.CommPassword))
+                        throw new InvalidOperationException(
+                            $"Could not reach the master terminal {master.DeviceName} at {master.DeviceIP}:{master.DevicePort}.");
+
                     pulled = await reader.GetTemplatesAsync(masterEnrolNumber);
                 }
-                finally { await reader.DisconnectAsync(); }
+                catch (InvalidOperationException)
+                {
+                    throw;   // already a clear message; the controller turns it into a 400
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Template pull from master {Device} failed", master.DeviceName);
+                    throw new InvalidOperationException(
+                        $"Reading fingerprints from {master.DeviceName} failed: {ex.Message}");
+                }
+                finally
+                {
+                    try { await reader.DisconnectAsync(); } catch { /* already gone */ }
+                }
             }
 
             if (pulled.Count == 0)
