@@ -1,0 +1,104 @@
+erDiagram
+    %% ========================================================================
+    %% ZKAttendance - Core ERD
+    %% The 10 tables that carry the main business logic. Operational tables
+    %% (device status, errors, sync logs, tokens, notifications) are in the
+    %% full diagram, ERD.mermaid.
+    %% ========================================================================
+
+    BRANCHES {
+        int      BranchId   PK
+        nvarchar BranchCode UK
+        nvarchar BranchName
+        bit      IsActive
+    }
+
+    DEPARTMENTS {
+        int      DepartmentId       PK
+        nvarchar DepartmentName     UK
+        int      ParentDepartmentId FK
+    }
+
+    WORKSHIFTS {
+        int      ShiftId   PK
+        nvarchar ShiftName
+        time     StartTime
+        time     EndTime
+    }
+
+    EMPLOYEES {
+        int      EmployeeId      PK
+        varchar  BiometricUserId
+        nvarchar EmployeeName
+        date     HireDate
+        int      DepartmentId    FK
+        int      DefaultShiftId  FK
+        bit      IsActive
+    }
+
+    EMPLOYEEBRANCHES {
+        int EmployeeBranchId PK
+        int EmployeeId       FK
+        int BranchId         FK
+    }
+
+    DEVICES {
+        int      DeviceId   PK
+        int      BranchId   FK
+        nvarchar DeviceName
+        nvarchar DeviceIP   UK
+        int      Role       "0 Slave 1 Master"
+    }
+
+    EMPLOYEEDEVICES {
+        int     EmployeeDeviceId PK
+        int     EmployeeId       FK
+        int     DeviceId         FK
+        varchar BiometricUserId  "per device"
+        bit     IsEnrolled
+    }
+
+    FINGERPRINTTEMPLATES {
+        int       TemplateId  PK
+        int       EmployeeId  FK
+        int       FingerIndex
+        varbinary TemplateData
+    }
+
+    ATTENDANCELOGS {
+        bigint   LogId          PK
+        int      EmployeeId     FK
+        int      DeviceId       FK
+        datetime AttendanceTime
+        nvarchar AttendanceType
+    }
+
+    ATTENDANCEAPPROVALS {
+        int      ApprovalId     PK
+        int      EmployeeId     FK
+        date     AttendanceDate
+        int      Status
+        datetime FirstCheckIn
+        int      MinutesLate
+    }
+
+    HOLIDAYS {
+        int      HolidayId   PK
+        nvarchar HolidayName
+        date     HolidayDate
+        int      BranchId    FK
+    }
+
+    DEPARTMENTS ||--o{ DEPARTMENTS          : "parent of"
+    DEPARTMENTS ||--o{ EMPLOYEES            : employs
+    WORKSHIFTS  ||--o{ EMPLOYEES            : "shift for"
+    BRANCHES    ||--o{ DEVICES              : contains
+    BRANCHES    ||--o{ HOLIDAYS             : "may scope"
+    EMPLOYEES   ||--o{ EMPLOYEEBRANCHES     : "works at"
+    BRANCHES    ||--o{ EMPLOYEEBRANCHES     : hosts
+    EMPLOYEES   ||--o{ EMPLOYEEDEVICES      : "enrolled on"
+    DEVICES     ||--o{ EMPLOYEEDEVICES      : knows
+    EMPLOYEES   ||--o{ FINGERPRINTTEMPLATES : "fingers cached"
+    EMPLOYEES   ||--o{ ATTENDANCELOGS       : scans
+    DEVICES     ||--o{ ATTENDANCELOGS       : records
+    EMPLOYEES   ||--o{ ATTENDANCEAPPROVALS  : "day decided for"

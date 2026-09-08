@@ -35,28 +35,17 @@ namespace ZKAttendance.Api.Controllers
     {
         private readonly AttendanceDbContext _db;
         private readonly INepaliCalendar _nepali;
+        private readonly IAttendancePolicyService _policy;
 
-        public OverviewApiController(AttendanceDbContext db, INepaliCalendar nepali)
+        public OverviewApiController(
+            AttendanceDbContext db,
+            INepaliCalendar nepali,
+            IAttendancePolicyService policy)
         {
             _db = db;
             _nepali = nepali;
+            _policy = policy;
         }
-
-        /// <summary>
-        /// Fallback cut-off used when an employee has no shift assigned: the
-        /// time of day after which a no-show counts as absent.
-        ///
-        /// An employee WITH a WorkShift uses that shift's EndTime in preference
-        /// to this. These constants only cover the gap for those who have none,
-        /// and are kept in code on purpose so appsettings.json is untouched.
-        /// </summary>
-        private static readonly TimeSpan DefaultCloseTime = new(18, 0, 0);
-
-        /// <summary>Slack after the shift ends before a no-show becomes absent.</summary>
-        private const int CloseGraceMinutes = 30;
-
-        /// <summary>Under this many hours, a present day is recorded as a half day.</summary>
-        private const double HalfDayUnderHours = 4.0;
 
         /// <param name="from">Gregorian start date. Defaults to 6 days ago.</param>
         /// <param name="to">Gregorian end date. Defaults to today.</param>
@@ -82,6 +71,13 @@ namespace ZKAttendance.Api.Controllers
 
             var now = DateTime.Now;
             var today = now.Date;
+
+            // Office hours come from Settings. An employee with a WorkShift
+            // still uses that shift's own EndTime in preference.
+            var policy = await _policy.GetAsync();
+            var defaultCloseTime = policy.OfficeEndTime;
+            var closeGraceMinutes = policy.CloseGraceMinutes;
+            var halfDayUnderHours = policy.HalfDayUnderHours;
 
             // ── days + holidays ────────────────────────────────────────
             var holidayRows = await _db.Holidays
@@ -188,8 +184,8 @@ namespace ZKAttendance.Api.Controllers
                         // When this person's working day ends.
                         var closeTime = e.DefaultShiftId is { } sid && shifts.TryGetValue(sid, out var sh)
                             ? sh.EndTime
-                            : DefaultCloseTime;
-                        var closeMoment = closeTime.Add(TimeSpan.FromMinutes(CloseGraceMinutes));
+                            : defaultCloseTime;
+                        var closeMoment = closeTime.Add(TimeSpan.FromMinutes(closeGraceMinutes));
 
                         var hireDate = e.HireDate?.Date;
 
@@ -238,7 +234,7 @@ namespace ZKAttendance.Api.Controllers
                             var lastOut = times.Count > 1 ? times.Last() : (DateTime?)null;
                             var hours = lastOut is { } lo ? Math.Round((lo - firstIn).TotalHours, 2) : 0.0;
 
-                            var status = hours > 0 && hours < HalfDayUnderHours ? "Half Day" : "Present";
+                            var status = hours > 0 && hours < halfDayUnderHours ? "Half Day" : "Present";
                             if (status == "Half Day") halfDay++;
                             present++;
                             closedWorkingDays++;
@@ -360,6 +356,11 @@ namespace ZKAttendance.Api.Controllers
             var employees = await empQuery.OrderBy(e => e.EmployeeName).ToListAsync();
             var empIds = employees.Select(e => e.EmployeeId).ToList();
 
+            // Same office-hours rules as the grid, so the two never disagree.
+            var policy = await _policy.GetAsync();
+            var defaultCloseTime = policy.OfficeEndTime;
+            var closeGraceMinutes = policy.CloseGraceMinutes;
+
             var shiftIds = employees.Where(e => e.DefaultShiftId.HasValue)
                                     .Select(e => e.DefaultShiftId!.Value).Distinct().ToList();
             var shifts = shiftIds.Count == 0
@@ -398,8 +399,8 @@ namespace ZKAttendance.Api.Controllers
                     {
                         var closeTime = e.DefaultShiftId is { } sid && shifts.TryGetValue(sid, out var sh)
                             ? sh.EndTime
-                            : DefaultCloseTime;
-                        var closeMoment = closeTime.Add(TimeSpan.FromMinutes(CloseGraceMinutes));
+                            : defaultCloseTime;
+                        var closeMoment = closeTime.Add(TimeSpan.FromMinutes(closeGraceMinutes));
                         var hireDate = e.HireDate?.Date;
 
                         // Working days that have finished AND fall after they joined.

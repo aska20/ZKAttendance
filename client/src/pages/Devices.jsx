@@ -243,15 +243,12 @@ export default function Devices() {
 
       {isAdmin && list.length > 1 && (
         <Card className="mb-4 p-3.5 text-sm text-slate-600">
-          <span className="font-medium text-slate-800">Several terminals are registered.</span>{' '}
-          Fingerprints are captured on the <b>Master</b> only, then copied to the others from the
-          stored copy — nobody scans twice. Use the{' '}
-          <FiUsers className="inline h-3.5 w-3.5 text-violet-600" /> action to fill a terminal that
-          was added later or was offline.
+          <span className="font-medium text-slate-800">Fingerprints are captured on the Master only.</span>{' '}
+          Use <FiUsers className="inline h-3.5 w-3.5 text-violet-600" /> to fill a terminal that was
+          added later or was offline.
           {!list.some((d) => d.role === 'Master') && (
             <span className="mt-1.5 block text-amber-700">
-              No device is marked Master yet, so the first active one is used. Set one explicitly to
-              avoid surprises.
+              No Master set. The first active device is being used.
             </span>
           )}
         </Card>

@@ -300,6 +300,102 @@ await ReadWithBufferAsync(CMD_DB_RRQ, FCT_FINGERTMP);      // 7  (constant added
 The buffered-read error message now names the command and reply code, so the next failure of this
 kind is diagnosable at a glance instead of being an opaque number.
 
+## Office hours, grace, and late-arrival approval
+
+New **Settings** page (sidebar, admin-editable) and a new **Attendance Approvals** queue.
+
+### The rule, with your numbers
+
+| Arrival | Status | Who decides |
+|---|---|---|
+| 10:00 to 10:15 | Approved | Automatic |
+| 10:15 to 11:00 | Late | Counted, flagged |
+| After 11:00 | **Pending** | Admin must approve |
+
+The middle band was the one thing your message left open, so it is a toggle:
+**"Late arrivals also need approval"**. Off by default, meaning 10:15 to 11:00 counts but shows as
+late. Turn it on and that band goes to the approval queue too.
+
+### Settings page
+
+Configurable: office start, office end, grace minutes, approval cut-off, the late toggle, absent
+wait, and the half-day threshold. The three coloured cards at the top recalculate live as you type,
+so you see the real clock times rather than adding minutes in your head.
+
+Stored in the existing **SystemSettings** table, so `appsettings.json` is still untouched and no
+redeploy is needed to change a rule. The hardcoded constants I had put in `OverviewApiController`
+now read from here instead.
+
+Invalid combinations are rejected with a reason, for example a cut-off earlier than the end of
+grace, or an end time before the start time.
+
+### Approvals queue
+
+Pending / Approved / Rejected / All tabs with a live pending count, department filter, date range,
+row-level Approve and Reject, and multi-select bulk approve. Approve and reject are **Admin only**;
+managers can view.
+
+A decision already made by a person is never overwritten by re-evaluation, so an approval does not
+silently revert on the next sync. If an earlier scan arrives late from an offline device, the
+earliest time wins and the day is re-classified.
+
+The queue re-checks the last three days whenever it is opened, so rows appear without a separate
+background job.
+
+### Database
+
+New table **AttendanceApprovals**, one row per employee per day, created only when a decision is
+actually needed.
+
+**Create it before opening the page:**
+
+```
+Add-Migration AddAttendanceApprovals
+Update-Database
+```
+
+The entity is already in the DbContext, so EF generates the migration correctly on its own. If you
+would rather not run migrations, execute `ZKAttendance.Infrastructure/Migrations/AddAttendanceApprovals.sql`
+instead; it is safe to re-run.
+
+The office-hours defaults do not need seeding. `AttendancePolicyService` falls back to
+10:00 / 15 min / 11:00 when the rows are absent and writes them the first time Settings is saved.
+
+### UI text
+
+Removed dash-joined sentences and cut the long explanatory notes down to one short line throughout.
+
+## Fix: 500 on the Attendance Approvals page
+
+My mistake, and a clean one.
+
+EF Core discovers migrations through a `[Migration("id")]` attribute, which lives in the paired
+`.Designer.cs` file, not in the migration class. I hand-wrote
+`20260908060000_AddAttendanceApprovals.cs` without a Designer file, so **EF never saw it as a
+migration at all**. `Update-Database` reported success and did nothing, the table was never created,
+and every query against it threw "Invalid object name" straight out as a 500.
+
+Faking the Designer was not an option: its `BuildTargetModel` has to contain the entire model, and
+getting that wrong would corrupt the baseline every future migration is diffed against.
+
+**The fix:** the invalid migration is deleted. The entity is already in the DbContext, so EF
+generates a correct migration itself:
+
+```
+Add-Migration AddAttendanceApprovals
+Update-Database
+```
+
+A plain `AddAttendanceApprovals.sql` is included as an alternative, and is safe to re-run.
+
+### Two things hardened along the way
+
+- **A missing table now says so.** The endpoint returns 503 with "The AttendanceApprovals table does
+  not exist yet. Run Add-Migration... then Update-Database" instead of an unexplained 500. The
+  sidebar count degrades to zero rather than breaking the page.
+- **The page no longer sits on "Loading..." under an error banner.** The failure path never set
+  state, so the card stayed in its loading placeholder for ever, which is what the screenshot showed.
+
 ## Still open
 
 - **Leave types** — not started.

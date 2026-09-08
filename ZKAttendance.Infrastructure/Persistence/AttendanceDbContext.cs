@@ -30,6 +30,7 @@ namespace ZKAttendance.Infrastructure.Persistence
         public DbSet<DeviceStatus> DeviceStatuses { get; set; }
         public DbSet<DeviceError> DeviceErrors { get; set; }
         public DbSet<SystemSetting> SystemSettings { get; set; }
+        public DbSet<AttendanceApproval> AttendanceApprovals { get; set; }
         public DbSet<EmployeeShiftAssignment> EmployeeShiftAssignments { get; set; }
 
         // ✅ NEW: Many-to-Many Relationship Table
@@ -288,6 +289,30 @@ namespace ZKAttendance.Infrastructure.Persistence
             });
 
             // ═════════════════════════════════════════════════════
+            // AttendanceApprovals Configuration
+            modelBuilder.Entity<AttendanceApproval>(entity =>
+            {
+                entity.HasKey(e => e.ApprovalId);
+
+                entity.HasOne(e => e.Employee)
+                      .WithMany()
+                      .HasForeignKey(e => e.EmployeeId)
+                      .OnDelete(DeleteBehavior.Cascade);
+
+                // One decision per employee per day.
+                entity.HasIndex(e => new { e.EmployeeId, e.AttendanceDate })
+                      .IsUnique()
+                      .HasDatabaseName("IX_AttendanceApproval_Employee_Date");
+
+                // The approval queue is read by status and date every time the
+                // page opens, so it gets its own index.
+                entity.HasIndex(e => new { e.Status, e.AttendanceDate })
+                      .HasDatabaseName("IX_AttendanceApproval_Status_Date");
+
+                entity.Property(e => e.Status).HasConversion<int>();
+                entity.Property(e => e.CreatedDate).HasDefaultValueSql("GETDATE()");
+            });
+
             // SystemSettings Configuration
             // ═════════════════════════════════════════════════════
             modelBuilder.Entity<SystemSetting>(entity =>

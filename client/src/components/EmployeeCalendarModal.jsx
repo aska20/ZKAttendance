@@ -173,7 +173,7 @@ export default function EmployeeCalendarModal({ employeeId, employeeName, onClos
       />
 
       <p className="mt-3 text-xs text-slate-400">
-        Each day shows the earliest check-in and the latest check-out. Click a day for every scan.
+        Click any day to see all scans.
       </p>
 
       {detail && (

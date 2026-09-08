@@ -52,6 +52,22 @@ export const employees = {
   updatePhoto: (id, photoUrl) => api.patch(`/Employees/${id}/photo`, { photoUrl }).then(r => r.data),
 }
 
+// ── Office hours and late-arrival approvals ──────────────────
+export const settings = {
+  attendance: () => get('/Settings/attendance'),
+  saveAttendance: (body) => put('/Settings/attendance', body),
+}
+
+export const approvals = {
+  list: (params) => get('/Attendance/approvals', params),
+  count: () => get('/Attendance/approvals/count'),
+  evaluate: (date) => post(`/Attendance/approvals/evaluate${date ? `?date=${date}` : ''}`),
+  approve: (id, note) => post(`/Attendance/approvals/${id}/approve`, { note }),
+  reject: (id, note) => post(`/Attendance/approvals/${id}/reject`, { note }),
+  approveMany: (approvalIds, note) =>
+    post('/Attendance/approvals/approve-many', { approvalIds, note }),
+}
+
 // ── Biometric enrolment ──────────────────────────────────────
 // Getting a person who exists here to also exist on the terminals.
 // `start` is what makes the ZKTeco screen switch to "place finger" /

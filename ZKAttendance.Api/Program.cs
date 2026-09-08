@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using ZKAttendance.Infrastructure.Persistence;
+using ZKAttendance.Infrastructure.Services.Attendance;
 using ZKAttendance.Infrastructure.Persistence.Repositories;
 using ZKAttendance.Infrastructure.Services.Attendances;
 using ZKAttendance.Application.Services.Attendances;
@@ -151,6 +152,10 @@ builder.Services.AddHostedService<AttendanceSyncBackgroundService>();
 // No background service and no new settings - propagation runs only when it is
 // asked for, from the employee screen or the Devices page.
 builder.Services.AddScoped<IDeviceEnrollmentOrchestrator, DeviceEnrollmentOrchestrator>();
+
+// Office hours, grace and the late-arrival cut-off. Stored in SystemSettings,
+// editable from the Settings screen, so no redeploy to change them.
+builder.Services.AddScoped<IAttendancePolicyService, AttendancePolicyService>();
 
 // ═══════════════════════════════════════════════════════
 // Authentication: JWT Bearer only.

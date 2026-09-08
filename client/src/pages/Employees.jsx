@@ -1269,9 +1269,7 @@ export default function Employees() {
         >
           {enrollFor.fresh && (
             <p className="mb-4 rounded-lg bg-sky-50 px-3 py-2.5 text-sm text-sky-900 ring-1 ring-sky-200">
-              They exist in the system now, but the machine at the door has not heard of them yet.
-              Press <b>Register on ZKTeco</b> and the terminal will open its registration screen for
-              them straight away.
+              Press <b>Register on ZKTeco</b> to open the registration screen on the terminal.
             </p>
           )}
           <DeviceEnrollPanel

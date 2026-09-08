@@ -262,9 +262,7 @@ export default function DeviceEnrollPanel({ employeeId, employeeName, compact = 
 
       {!compact && (
         <p className="text-xs text-slate-400">
-          Registration opens on the terminal itself, so the person must be standing at it. Once one
-          terminal has their finger, the others are filled from the stored copy — nobody has to scan
-          twice.
+          The person must be at the terminal to scan. Other terminals are filled automatically.
         </p>
       )}
 

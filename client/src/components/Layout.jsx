@@ -26,12 +26,14 @@ export default function Layout() {
             )}
             <NavItem to="/reports/daily" label="Daily Report" />
             <NavItem to="/attendance" label="Attendance" />
+            <NavItem to="/attendance/approvals" label="Attendance Approvals" />
             <NavItem to="/reports/summary" label="Summary Report" />
             <NavItem to="/unregistered" label="Unregistered IDs" />
             <NavItem to="/holidays" label="Holidays" />
             <NavItem to="/branches" label="Branches" />
             <NavItem to="/devices" label="Devices" />
             <NavItem to="/errors" label="Error Log" />
+            <NavItem to="/settings" label="Settings" />
           </>
         ) : (
           <NavItem to="/my-attendance" label="My Attendance" />

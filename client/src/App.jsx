@@ -14,6 +14,8 @@ import DailyReport from './pages/DailyReport'
 import SummaryReport from './pages/SummaryReport'
 import EmployeeReport from './pages/EmployeeReport'
 import Holidays from './pages/Holidays'
+import Settings from './pages/Settings'
+import AttendanceApprovals from './pages/AttendanceApprovals'
 import Profile from './pages/Profile'
 import MyAttendance from './pages/MyAttendance'
 import PendingApprovals from './pages/PendingApprovals'
@@ -51,6 +53,8 @@ export default function App() {
         <Route path="branches" element={<Manager><Branches /></Manager>} />
         <Route path="devices" element={<Manager><Devices /></Manager>} />
         <Route path="holidays" element={<Manager><Holidays /></Manager>} />
+        <Route path="attendance/approvals" element={<Manager><AttendanceApprovals /></Manager>} />
+        <Route path="settings" element={<Manager><Settings /></Manager>} />
         <Route path="errors" element={<Manager><ErrorLog /></Manager>} />
         <Route path="reports/daily" element={<Manager><DailyReport /></Manager>} />
         <Route path="reports/summary" element={<Manager><SummaryReport /></Manager>} />

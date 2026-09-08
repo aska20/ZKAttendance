@@ -144,7 +144,7 @@ export default function Holidays() {
     <div>
       <PageHeader
         title="Holidays"
-        subtitle="Click a day, or pick a date on the right. Marked days are excluded from working-day counts."
+        subtitle="Click a day or pick a date to mark a holiday"
         actions={<DateToggle />}
       />
       {error && <ErrorText>{error}</ErrorText>}
@@ -248,15 +248,15 @@ export default function Holidays() {
             </h2>
             <p className="mt-0.5 text-xs text-slate-500">
               {editingExisting
-                ? 'Saving overwrites the entry already on this date.'
-                : 'Pick any date — past or future. Future holidays are what the calendar needs in advance.'}
+                ? 'This will overwrite the existing entry.'
+                : 'Past and future dates are both allowed.'}
             </p>
 
             <form onSubmit={save} className="mt-4 space-y-4">
               <Field
                 label={`Date (${isBs ? 'BS' : 'AD'})`}
                 required
-                hint="Holidays are declared ahead of time, so future dates are allowed here."
+                
               >
                 <NepaliDatePicker
                   value={form.date}
@@ -279,7 +279,7 @@ export default function Holidays() {
                 </div>
               )}
 
-              <Field label="Name" required hint="e.g. Teej, Tihar, Dashain, Constitution Day">
+              <Field label="Name" required hint="e.g. Dashain, Tihar, Teej">
                 <Input
                   value={form.holidayName}
                   onChange={(e) => setForm({ ...form, holidayName: e.target.value })}
@@ -301,7 +301,7 @@ export default function Holidays() {
                 </Select>
               </Field>
 
-              <Field label="Note" hint="Optional — a short description">
+              <Field label="Note" hint="Optional">
                 <Input
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}

@@ -1,0 +1,241 @@
+erDiagram
+    %% ========================================================================
+    %% ZKAttendance - Entity Relationship Diagram
+    %% 20 tables. PK = primary key, FK = foreign key, UK = unique key.
+    %% ========================================================================
+
+    %% ---------------- ORGANISATION ----------------
+    BRANCHES {
+        int      BranchId        PK
+        nvarchar BranchCode      UK
+        nvarchar BranchName
+        nvarchar City
+        nvarchar Address
+        bit      IsActive
+        datetime LastSyncTime
+    }
+
+    DEPARTMENTS {
+        int      DepartmentId       PK
+        nvarchar DepartmentName     UK
+        nvarchar DepartmentCode
+        int      ParentDepartmentId FK
+        bit      IsActive
+    }
+
+    WORKSHIFTS {
+        int      ShiftId      PK
+        nvarchar ShiftName
+        time     StartTime
+        time     EndTime
+        int      LateMinutes
+        int      WorkMinutes
+        bit      IsActive
+    }
+
+    EMPLOYEES {
+        int      EmployeeId      PK
+        varchar  BiometricUserId "enrol number"
+        nvarchar EmployeeName
+        nvarchar Email
+        date     HireDate        "not future"
+        int      DepartmentId    FK
+        int      DefaultShiftId  FK
+        nvarchar ApprovalStatus
+        bit      IsActive
+    }
+
+    EMPLOYEEBRANCHES {
+        int  EmployeeBranchId PK
+        int  EmployeeId       FK
+        int  BranchId         FK
+        date AssignedDate
+        bit  IsActive
+    }
+
+    EMPLOYEESHIFTASSIGNMENTS {
+        int  AssignmentId  PK
+        int  EmployeeId    FK
+        int  ShiftId       FK
+        date EffectiveFrom
+        date EffectiveTo
+    }
+
+    %% ---------------- DEVICES ----------------
+    DEVICES {
+        int      DeviceId      PK
+        int      BranchId      FK
+        nvarchar DeviceName
+        nvarchar DeviceIP      UK "with DevicePort"
+        int      DevicePort    UK
+        int      Role          "0 Slave, 1 Master"
+        int      CommPassword
+        bit      IsProvisioned
+        bit      IsActive
+    }
+
+    EMPLOYEEDEVICES {
+        int     EmployeeDeviceId PK
+        int     EmployeeId       FK
+        int     DeviceId         FK
+        varchar BiometricUserId  "per-device enrol no"
+        bit     IsEnrolled
+        bit     IsActive
+    }
+
+    DEVICESTATUSES {
+        bigint   StatusId    PK
+        int      DeviceId    FK
+        int      BranchId    FK
+        bit      IsOnline
+        datetime StatusTime
+        datetime DeviceTime
+        int      UserCount
+    }
+
+    DEVICEERRORS {
+        bigint   ErrorId       PK
+        int      DeviceId      FK
+        int      BranchId      FK
+        nvarchar ErrorMessage
+        nvarchar Severity
+        bit      IsResolved
+    }
+
+    SYNCLOGS {
+        int      SyncId         PK
+        int      DeviceId       FK
+        int      BranchId       FK
+        datetime StartTime
+        nvarchar Status
+        int      RecordCount
+        int      NewRecordCount
+        int      DuplicateCount
+    }
+
+    %% ---------------- ENROLMENT ----------------
+    FINGERPRINTTEMPLATES {
+        int       TemplateId            PK
+        int       EmployeeId            FK
+        int       FingerIndex           "0-9"
+        varbinary TemplateData
+        int       TemplateFormatVersion "9 or 10"
+        int       SourceDeviceId
+    }
+
+    PENDINGENROLLMENTS {
+        int      PendingEnrollmentId PK
+        int      DeviceId            FK
+        varchar  DeviceUserId
+        nvarchar NameOnDevice
+        int      Status
+        int      ApprovedEmployeeId  FK
+    }
+
+    %% ---------------- ATTENDANCE ----------------
+    ATTENDANCELOGS {
+        bigint   LogId           PK
+        varchar  BiometricUserId UK "with time+device"
+        int      EmployeeId      FK "nullable"
+        int      DeviceId        FK
+        int      BranchId        FK
+        datetime AttendanceTime  UK
+        nvarchar AttendanceType
+        nvarchar VerifyMethod
+        bit      IsManual
+    }
+
+    ATTENDANCEAPPROVALS {
+        int      ApprovalId     PK
+        int      EmployeeId     FK
+        date     AttendanceDate UK "with EmployeeId"
+        int      Status         "0 Auto 1 Pending 2 Appr 3 Rej"
+        datetime FirstCheckIn
+        int      MinutesLate
+        nvarchar DecidedBy
+        datetime DecidedDate
+    }
+
+    HOLIDAYS {
+        int      HolidayId   PK
+        nvarchar HolidayName UK "with date"
+        date     HolidayDate UK
+        nvarchar HolidayType
+        int      BranchId    FK "null = all"
+        bit      IsActive
+    }
+
+    %% ---------------- SECURITY ----------------
+    APIUSERS {
+        int      ApiUserId    PK
+        nvarchar Username     UK
+        nvarchar Email        UK
+        nvarchar PasswordHash
+        nvarchar Role         "Admin Manager Employee"
+        int      EmployeeId   FK "unique, nullable"
+        bit      IsActive
+    }
+
+    REFRESHTOKENS {
+        int      RefreshTokenId PK
+        int      ApiUserId      FK
+        nvarchar Token          UK
+        datetime ExpiresAt
+        datetime RevokedAt
+    }
+
+    %% ---------------- SYSTEM ----------------
+    SYSTEMSETTINGS {
+        int      SettingId    PK
+        nvarchar SettingKey   UK
+        nvarchar SettingValue
+        nvarchar Category     "Attendance, Sync, Device"
+        bit      IsActive
+    }
+
+    NOTIFICATIONS {
+        bigint   NotificationId  PK
+        int      RecipientUserId FK
+        nvarchar RecipientRole
+        nvarchar Message
+        bit      IsRead
+    }
+
+    %% ======================= RELATIONSHIPS =======================
+
+    DEPARTMENTS ||--o{ DEPARTMENTS              : "parent of"
+    DEPARTMENTS ||--o{ EMPLOYEES                : employs
+    WORKSHIFTS  ||--o{ EMPLOYEES                : "default shift for"
+
+    EMPLOYEES   ||--o{ EMPLOYEEBRANCHES         : "assigned to"
+    BRANCHES    ||--o{ EMPLOYEEBRANCHES         : hosts
+
+    EMPLOYEES   ||--o{ EMPLOYEESHIFTASSIGNMENTS : "scheduled by"
+    WORKSHIFTS  ||--o{ EMPLOYEESHIFTASSIGNMENTS : "applied in"
+
+    BRANCHES    ||--o{ DEVICES                  : contains
+    BRANCHES    ||--o{ HOLIDAYS                 : "may scope"
+
+    EMPLOYEES   ||--o{ EMPLOYEEDEVICES          : "enrolled on"
+    DEVICES     ||--o{ EMPLOYEEDEVICES          : "knows"
+
+    DEVICES     ||--o{ DEVICESTATUSES           : reports
+    DEVICES     ||--o{ DEVICEERRORS             : raises
+    DEVICES     ||--o{ SYNCLOGS                 : "synced by"
+    BRANCHES    ||--o{ DEVICESTATUSES           : scopes
+    BRANCHES    ||--o{ DEVICEERRORS             : scopes
+    BRANCHES    ||--o{ SYNCLOGS                 : scopes
+
+    EMPLOYEES   ||--o{ FINGERPRINTTEMPLATES     : "fingers cached"
+    DEVICES     ||--o{ PENDINGENROLLMENTS       : discovers
+    EMPLOYEES   ||--o| PENDINGENROLLMENTS       : "claimed by"
+
+    EMPLOYEES   ||--o{ ATTENDANCELOGS           : scans
+    DEVICES     ||--o{ ATTENDANCELOGS           : records
+    BRANCHES    ||--o{ ATTENDANCELOGS           : scopes
+
+    EMPLOYEES   ||--o{ ATTENDANCEAPPROVALS      : "day decided for"
+
+    EMPLOYEES   ||--o| APIUSERS                 : "logs in as"
+    APIUSERS    ||--o{ REFRESHTOKENS            : issues
+    APIUSERS    ||--o{ NOTIFICATIONS            : receives

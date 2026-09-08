@@ -220,9 +220,7 @@ export default function DayDetailModal({ employeeId, employeeName, date, dateBs,
 
           {data.count === 0 && (
             <p className="rounded-lg bg-rose-50 px-4 py-3 text-sm text-rose-800 ring-1 ring-rose-200">
-              No scan was recorded on this working day, so it counts as <b>absent</b>. If the person
-              was in and a device was down, add the punch by hand from the attendance screen — the
-              entry stays flagged as manual.
+              No scan recorded, so this counts as <b>absent</b>. Add a manual punch from the attendance screen if needed.
             </p>
           )}
         </div>
