@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { holidays as api } from '../api/resources'
 import { apiErrorMessage } from '../lib/errors'
 import { ymd, dmy, bsDmy, todayIso } from '../lib/dates'
@@ -39,8 +39,21 @@ export default function Holidays() {
   const [editingExisting, setEditingExisting] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  // Re-base the visible month when the calendar system is switched.
+  // Re-base the month only when the user actually TOGGLES AD/BS.
+  //
+  // This effect converts the view from the old system into the new one. On the
+  // first render no toggle happened, so running it treated a date that was
+  // already correct as if it were in the other calendar. That pushed the year
+  // to 2140 BS and rendered a nonsense AD year, which is why every calendar
+  // opened on the wrong decade.
+  const didMount = useRef(false)
+
   useEffect(() => {
+    if (!didMount.current) {
+      didMount.current = true
+      return
+    }
+
     setView((v) => {
       const grid = buildMonthGrid(isBs ? 'AD' : 'BS', v.year, v.month)
       const anchor = grid.cells.find(Boolean)

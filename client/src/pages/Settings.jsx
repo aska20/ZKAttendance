@@ -23,6 +23,7 @@ export default function Settings() {
   const [saving, setSaving] = useState(false)
 
   const [mail, setMail] = useState(null)
+  const [mailError, setMailError] = useState('')
   const [testTo, setTestTo] = useState('')
   const [mailBusy, setMailBusy] = useState('')
 
@@ -35,8 +36,20 @@ export default function Settings() {
     api
       .email()
       // password is never sent back, so track it separately
-      .then((m) => setMail({ ...m, password: '' }))
-      .catch(() => setMail(null))
+      .then((m) => {
+        setMail({ ...m, password: '' })
+        setMailError('')
+      })
+      .catch((e) => {
+        // Hiding the card on failure meant the section simply vanished with no
+        // explanation, which is worse than showing the reason.
+        setMail(null)
+        setMailError(
+          e?.response?.status === 404
+            ? 'The email settings endpoint was not found. The API is running an older build, so rebuild and restart it.'
+            : apiErrorMessage(e),
+        )
+      })
   }, [])
 
   const set = (key) => (value) => setForm((f) => ({ ...f, [key]: value }))
@@ -101,7 +114,7 @@ export default function Settings() {
   if (!form) return <p className="text-sm text-slate-400">Loading...</p>
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-6xl">
       <PageHeader title="Settings" subtitle="Office hours and attendance rules" />
 
       <form onSubmit={save} className="space-y-4">
@@ -134,6 +147,7 @@ export default function Settings() {
           </Card>
         )}
 
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-900">Office hours</h2>
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -185,9 +199,9 @@ export default function Settings() {
           </div>
         </Card>
 
-        <Card className="p-5">
+        <Card className="p-5 lg:col-span-2">
           <h2 className="text-sm font-semibold text-slate-900">Marking absent</h2>
-          <div className="mt-4 space-y-4">
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-8">
             <NumberField
               label="Wait after end time"
               unit="minutes"
@@ -210,6 +224,7 @@ export default function Settings() {
             />
           </div>
         </Card>
+        </div>
 
         {isAdmin ? (
           <div className="flex justify-end gap-2">
@@ -223,6 +238,24 @@ export default function Settings() {
       </form>
 
       {/* Email. Needed before any attendance email can go out. */}
+      {isAdmin && !mail && (
+        <Card className="mt-4 p-5">
+          <h2 className="text-sm font-semibold text-slate-900">Email (SMTP)</h2>
+          <p className="mt-2 text-sm text-amber-800">
+            {mailError || 'Loading...'}
+          </p>
+        </Card>
+      )}
+
+      {!isAdmin && (
+        <Card className="mt-4 p-5">
+          <h2 className="text-sm font-semibold text-slate-900">Email (SMTP)</h2>
+          <p className="mt-2 text-sm text-slate-500">
+            Only an admin can view or change the email settings.
+          </p>
+        </Card>
+      )}
+
       {isAdmin && mail && (
         <form onSubmit={saveMail} className="mt-4 space-y-4">
           <Card className="p-5">
@@ -376,12 +409,12 @@ function TimeField({ label, value, onChange, disabled }) {
 
 function NumberField({ label, unit, value, onChange, min, max, step = 1, disabled, hint }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="grid grid-cols-1 items-center gap-x-4 gap-y-1 sm:grid-cols-[1fr_auto]">
       <div className="min-w-0">
         <div className="text-sm font-medium text-slate-700">{label}</div>
         {hint && <div className="text-xs tabular-nums text-slate-400">{hint}</div>}
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex items-center gap-2 sm:justify-self-end">
         <input
           type="number"
           value={value}
@@ -390,9 +423,9 @@ function NumberField({ label, unit, value, onChange, min, max, step = 1, disable
           step={step}
           disabled={disabled}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="input w-24 text-right tabular-nums disabled:bg-slate-50 disabled:text-slate-500"
+          className="input w-20 text-right tabular-nums disabled:bg-slate-50 disabled:text-slate-500"
         />
-        <span className="w-28 text-xs text-slate-500">{unit}</span>
+        <span className="w-24 shrink-0 text-xs text-slate-500">{unit}</span>
       </div>
     </div>
   )
@@ -400,7 +433,7 @@ function NumberField({ label, unit, value, onChange, min, max, step = 1, disable
 
 function Toggle({ label, checked, onChange, disabled, hint }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex items-center justify-between gap-4">
       <div className="min-w-0">
         <div className="text-sm font-medium text-slate-700">{label}</div>
         {hint && <div className="text-xs tabular-nums text-slate-400">{hint}</div>}

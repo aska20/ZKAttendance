@@ -39,11 +39,12 @@ export default function Profile() {
   )
 
   return (
-    <div className="max-w-lg">
+    <div className="max-w-5xl">
       <PageHeader title="Profile & Security" />
       {error && <ErrorText>{error}</ErrorText>}
 
-      <Card className="mb-6 p-5">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
+      <Card className="p-5">
         {loading ? (
           <p className="text-sm text-slate-500">Loading…</p>
         ) : data ? (
@@ -76,6 +77,7 @@ export default function Profile() {
           <Button type="submit" disabled={saving}>{saving ? 'Saving…' : 'Update password'}</Button>
         </form>
       </Card>
+      </div>
     </div>
   )
 }
