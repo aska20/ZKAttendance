@@ -17,6 +17,9 @@ using ZKAttendance.Infrastructure.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Hangfire;
+using Hangfire.SqlServer;
+using ZKAttendance.Api.Security;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -97,8 +100,35 @@ builder.Services.AddScoped<IManualAttendanceEntry, ManualAttendanceEntry>();
 builder.Services.AddScoped<ITokenService, JwtTokenService>();
 
 
-// In-app notifications (bell menu).
+// In-app notifications (bell menu) & email delivery
 builder.Services.AddScoped<ZKAttendance.Api.Services.Notifier>();
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+builder.Services.AddScoped<IEmployeeLateNotificationService, EmployeeLateNotificationService>();
+
+// ═══════════════════════════════════════════════════════
+// Hangfire Background Job Server
+// ═══════════════════════════════════════════════════════
+builder.Services.AddHangfire(config => config
+    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UseSqlServerStorage(builder.Configuration.GetConnectionString("DefaultConnection"), new SqlServerStorageOptions
+    {
+        CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+        SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+        QueuePollInterval = TimeSpan.Zero,
+        UseRecommendedIsolationLevel = true,
+        DisableGlobalLocks = true,
+        PrepareSchemaIfNecessary = true,
+        SchemaName = "HangFire"
+    }));
+
+var hangfireWorkers = builder.Configuration.GetValue("HangfireSettings:WorkerCount", 4);
+builder.Services.AddHangfireServer(options =>
+{
+    options.WorkerCount = hangfireWorkers;
+    options.Queues = new[] { "critical", "device-sync", "default" };
+});
 
 // ═══════════════════════════════════════════════════════
 // Background services
@@ -143,7 +173,9 @@ builder.Services.AddTransient<Func<IZkDeviceReader>>(sp => () =>
         : new FakeDeviceReader(sp.GetRequiredService<ILogger<FakeDeviceReader>>()));
 
 builder.Services.AddScoped<IAttendanceSyncService, AttendanceSyncService>();
-builder.Services.AddHostedService<AttendanceSyncBackgroundService>();
+// Note: AttendanceSyncBackgroundService is superseded by Hangfire recurring job 'sync-attendance-devices'
+// which provides persistent scheduling, retry policies, and dashboard monitoring.
+// builder.Services.AddHostedService<AttendanceSyncBackgroundService>();
 
 // Multi-device enrolment. One ACTIVE device is the Master: the only place a
 // finger is physically captured. Everything else is a Slave and receives its
@@ -273,6 +305,48 @@ app.UseCors(SpaCorsPolicy);
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// ═══════════════════════════════════════════════════════
+// Hangfire Dashboard & Scheduled Recurring Jobs
+// ═══════════════════════════════════════════════════════
+app.UseHangfireDashboard("/hangfire", new DashboardOptions
+{
+    Authorization = new[] { new HangfireAuthorizationFilter() },
+    DashboardTitle = "ZKAttendance Background Jobs"
+});
+
+var recurringJobs = app.Services.GetRequiredService<IRecurringJobManager>();
+
+// 1. Device Attendance Sync (runs every 5 minutes by default if AutoSync is enabled)
+var syncIntervalMinutes = builder.Configuration.GetValue("SyncConfiguration:SyncIntervalMinutes", 5);
+var autoSyncEnabled = builder.Configuration.GetValue("SyncConfiguration:EnableAutoSync", false);
+if (autoSyncEnabled)
+{
+    recurringJobs.AddOrUpdate<IAttendanceSyncService>(
+        "sync-attendance-devices",
+        service => service.SyncAllDevicesAsync(CancellationToken.None),
+        $"*/{Math.Max(1, syncIntervalMinutes)} * * * *",
+        new RecurringJobOptions { QueueName = "device-sync" });
+}
+
+// 2. Automated Late Arrival Notification Job (evaluates punches against policy and notifies employees)
+var lateNotificationEnabled = builder.Configuration.GetValue("LateNotificationSettings:Enabled", true);
+var lateCron = builder.Configuration["LateNotificationSettings:CronExpression"] ?? "*/15 * * * *";
+if (lateNotificationEnabled)
+{
+    recurringJobs.AddOrUpdate<IEmployeeLateNotificationService>(
+        "check-late-arrivals",
+        service => service.ProcessTodayLateArrivalsAsync(CancellationToken.None),
+        lateCron,
+        new RecurringJobOptions { QueueName = "default" });
+}
+
+// 3. Daily End-of-Day Attendance Policy Evaluation (23:55 every night)
+recurringJobs.AddOrUpdate<IAttendancePolicyService>(
+    "evaluate-attendance-day",
+    service => service.EvaluateTodayAsync(CancellationToken.None),
+    "55 23 * * *",
+    new RecurringJobOptions { QueueName = "default" });
 
 app.MapControllers();
 

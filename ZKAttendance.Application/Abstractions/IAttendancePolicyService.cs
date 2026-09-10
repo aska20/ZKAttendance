@@ -92,5 +92,10 @@ namespace ZKAttendance.Application.Abstractions
         /// approval queue reflects what the devices actually reported.
         /// </summary>
         Task<int> EvaluateDayAsync(DateTime date, CancellationToken ct = default);
+
+        /// <summary>
+        /// Evaluates today's attendance logs against policy. Safe for recurring background jobs.
+        /// </summary>
+        Task<int> EvaluateTodayAsync(CancellationToken ct = default);
     }
 }

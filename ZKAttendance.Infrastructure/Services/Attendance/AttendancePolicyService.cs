@@ -136,6 +136,9 @@ namespace ZKAttendance.Infrastructure.Services.Attendance
                 throw new InvalidOperationException("Half day hours must be between 0 and 24.");
         }
 
+        public Task<int> EvaluateTodayAsync(CancellationToken ct = default)
+            => EvaluateDayAsync(DateTime.Today, ct);
+
         public async Task<int> EvaluateDayAsync(DateTime date, CancellationToken ct = default)
         {
             var day = date.Date;
