@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
+using ZKAttendance.Infrastructure.Services.Notifications;
 using ZKAttendance.Api.Security;
 using ZKAttendance.Application.Abstractions;
 using ZKAttendance.Application.Dtos.Api;
@@ -336,6 +338,173 @@ namespace ZKAttendance.Api.Controllers
                 row.DecidedBy,
                 row.DecidedDate
             });
+        }
+    }
+
+    public class EmailSettingsRequest
+    {
+        public string? SmtpHost { get; set; }
+        public int SmtpPort { get; set; } = 587;
+        public bool UseSsl { get; set; } = true;
+        public string? Username { get; set; }
+        /// <summary>Leave null or blank to keep the stored password unchanged.</summary>
+        public string? Password { get; set; }
+        public string? FromAddress { get; set; }
+        public string? FromName { get; set; }
+    }
+
+    /// <summary>
+    /// SMTP settings, kept in the database rather than appsettings.json so the
+    /// mail server can be changed without a redeploy.
+    /// </summary>
+    [Route("api/Settings/email")]
+    [ApiController]
+    [Produces("application/json")]
+    [Tags("Settings")]
+    [Authorize(Roles = Roles.Admin)]
+    public class EmailSettingsApiController : ControllerBase
+    {
+        private readonly AttendanceDbContext _db;
+        private readonly IMemoryCache _cache;
+        private readonly IEmailSender _sender;
+        private readonly ILogger<EmailSettingsApiController> _logger;
+
+        public EmailSettingsApiController(
+            AttendanceDbContext db,
+            IMemoryCache cache,
+            IEmailSender sender,
+            ILogger<EmailSettingsApiController> logger)
+        {
+            _db = db;
+            _cache = cache;
+            _sender = sender;
+            _logger = logger;
+        }
+
+        /// <summary>
+        /// Current settings. The password is NEVER returned, only whether one
+        /// is stored, so opening the page cannot leak it to the browser.
+        /// </summary>
+        [HttpGet]
+        [ProducesResponseType(200)]
+        public async Task<IActionResult> Get(CancellationToken ct)
+        {
+            var rows = await _db.SystemSettings
+                .Where(s => s.Category == SmtpEmailSender.Category && s.IsActive)
+                .ToDictionaryAsync(s => s.SettingKey, s => s.SettingValue, ct);
+
+            string? V(string k) => rows.TryGetValue(k, out var v) && !string.IsNullOrWhiteSpace(v) ? v : null;
+
+            return Ok(new
+            {
+                smtpHost = V("SmtpHost"),
+                smtpPort = int.TryParse(V("SmtpPort"), out var p) ? p : 587,
+                useSsl = !string.Equals(V("UseSsl"), "false", StringComparison.OrdinalIgnoreCase),
+                username = V("Username"),
+                fromAddress = V("FromAddress"),
+                fromName = V("FromName") ?? "Attendance System",
+                passwordIsSet = !string.IsNullOrWhiteSpace(V("Password")),
+                configured = await _sender.IsConfiguredAsync(ct)
+            });
+        }
+
+        [HttpPut]
+        [ProducesResponseType(200)]
+        [ProducesResponseType(typeof(ApiError), 400)]
+        public async Task<IActionResult> Update(
+            [FromBody] EmailSettingsRequest request, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(request.SmtpHost))
+                return BadRequest(ApiError.From("An SMTP host is required, for example smtp.gmail.com."));
+
+            var from = request.FromAddress?.Trim();
+            if (string.IsNullOrWhiteSpace(from)) from = request.Username?.Trim();
+            if (string.IsNullOrWhiteSpace(from))
+                return BadRequest(ApiError.From("A from-address is required. Mail servers reject messages without one."));
+
+            if (request.SmtpPort is < 1 or > 65535)
+                return BadRequest(ApiError.From("The port must be between 1 and 65535. 587 is usual."));
+
+            var pairs = new Dictionary<string, string?>
+            {
+                ["SmtpHost"] = request.SmtpHost.Trim(),
+                ["SmtpPort"] = request.SmtpPort.ToString(),
+                ["UseSsl"] = request.UseSsl ? "true" : "false",
+                ["Username"] = request.Username?.Trim(),
+                ["FromAddress"] = from,
+                ["FromName"] = string.IsNullOrWhiteSpace(request.FromName) ? "Attendance System" : request.FromName.Trim()
+            };
+
+            // A blank password means "leave it alone", so re-saving the form
+            // after loading it does not wipe the stored one.
+            if (!string.IsNullOrWhiteSpace(request.Password))
+                pairs["Password"] = request.Password;
+
+            var existing = await _db.SystemSettings
+                .Where(s => s.Category == SmtpEmailSender.Category)
+                .ToListAsync(ct);
+
+            foreach (var (key, value) in pairs)
+            {
+                var row = existing.FirstOrDefault(s => s.SettingKey == key);
+                if (row is null)
+                {
+                    _db.SystemSettings.Add(new SystemSetting
+                    {
+                        SettingKey = key,
+                        SettingValue = value ?? string.Empty,
+                        Category = SmtpEmailSender.Category,
+                        IsActive = true,
+                        CreatedDate = DateTime.Now
+                    });
+                }
+                else
+                {
+                    row.SettingValue = value ?? string.Empty;
+                    row.IsActive = true;
+                    row.ModifiedDate = DateTime.Now;
+                }
+            }
+
+            await _db.SaveChangesAsync(ct);
+            _cache.Remove(SmtpEmailSender.CacheKey);
+
+            _logger.LogInformation("Email settings updated by {User}", User.Identity?.Name);
+
+            return Ok(new { configured = await _sender.IsConfiguredAsync(ct), message = "Email settings saved." });
+        }
+
+        /// <summary>
+        /// Send one message to prove the settings work, before the end-of-day
+        /// job tries it on two hundred people.
+        /// </summary>
+        [HttpPost("test")]
+        [ProducesResponseType(200)]
+        [ProducesResponseType(typeof(ApiError), 400)]
+        public async Task<IActionResult> Test([FromQuery] string? to, CancellationToken ct)
+        {
+            var recipient = to?.Trim();
+            if (string.IsNullOrWhiteSpace(recipient))
+                return BadRequest(ApiError.From("Enter an address to send the test to."));
+
+            try
+            {
+                await _sender.SendAsync(
+                    recipient,
+                    "Attendance system test email",
+                    "<p>This is a test from the attendance system.</p>" +
+                    "<p>If you can read this, SMTP is working and the end-of-day emails will send.</p>",
+                    ct);
+
+                return Ok(new { sent = true, message = $"Test email sent to {recipient}. Check the inbox and the spam folder." });
+            }
+            catch (Exception ex)
+            {
+                // The SMTP error is the single most useful thing here, so pass
+                // it through rather than replacing it with something generic.
+                _logger.LogWarning(ex, "Test email to {To} failed", recipient);
+                return BadRequest(ApiError.From($"Sending failed: {ex.Message}"));
+            }
         }
     }
 }

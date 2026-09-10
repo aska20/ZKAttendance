@@ -8,7 +8,6 @@ import {
   FaEnvelope,
   FaBriefcase,
   FaBuilding,
-  FaStar,
   FaUser,
   FaChevronLeft,
   FaChevronRight,
@@ -19,7 +18,8 @@ import { MdCalendarMonth } from 'react-icons/md'
 import { RiFileList3Line } from 'react-icons/ri'
 import { employees as empApi, overview, attendance, departments as deptApi } from '../api/resources'
 import { apiErrorMessage } from '../lib/errors'
-import { ymd, hm } from '../lib/dates'
+import { ymd, hm, dmy, bsDmy } from '../lib/dates'
+import StatusMark from '../components/attendance/StatusMark'
 import { Card, Badge, ErrorText } from '../components/ui'
 import DayDetailModal from '../components/DayDetailModal'
 import { useCalendar } from '../context/CalendarContext'
@@ -293,8 +293,12 @@ export default function EmployeeReport() {
       if (isOff) {
         holidays++
       } else {
-        workingDays++
         const status = c.cell?.status
+
+        // Days that have not happened are not working days yet, so they must
+        // not inflate the denominator either.
+        if (status === 'Upcoming' || (!c.cell && c.dateIso > todayIso)) continue
+        workingDays++
         const hrs = c.cell?.hours || 0
         totalHours += hrs
 
@@ -318,7 +322,7 @@ export default function EmployeeReport() {
       holidays,
       totalHours: Number(totalHours.toFixed(2)),
     }
-  }, [calendarCells, empOverview])
+  }, [calendarCells, empOverview, todayIso])
 
   // Table rows for day-by-day log
   const tableRows = useMemo(() => {
@@ -330,15 +334,26 @@ export default function EmployeeReport() {
         const isWeeklyOff = meta?.isHoliday && (meta?.holidayName === 'Weekly off' || meta?.holidayName?.toLowerCase().includes('off'))
         const isHoliday = meta?.isHoliday && !isWeeklyOff
 
-        let resolvedStatus = 'Absent'
+        // A day only becomes Absent once it has actually finished. The server
+        // sends 'Upcoming' for today-before-close and for future days; the old
+        // default of 'Absent' meant anything it did not recognise, including
+        // the rest of the month, was painted red.
+        let resolvedStatus = 'Upcoming'
         if (isWeeklyOff || cell?.status === 'Day Off' || cell?.status === 'Weekly off') {
           resolvedStatus = 'Day Off'
         } else if (isHoliday || cell?.status === 'Holiday') {
           resolvedStatus = 'Holiday'
+        } else if (cell?.status === 'Not Joined') {
+          resolvedStatus = 'Not Joined'
         } else if (cell?.status === 'Half Day' || (cell?.hours > 0 && cell?.hours < 4)) {
           resolvedStatus = 'Half Day'
         } else if (cell?.status === 'Present') {
           resolvedStatus = 'Present'
+        } else if (cell?.status === 'Absent') {
+          resolvedStatus = 'Absent'
+        } else if (!cell && c.dateIso < todayIso) {
+          // No cell at all on a past working day still means absent.
+          resolvedStatus = 'Absent'
         }
 
         const weekday = new Date(c.dateIso + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short' })
@@ -360,7 +375,7 @@ export default function EmployeeReport() {
         if (tableFilter === 'holiday') return r.resolvedStatus === 'Holiday' || r.resolvedStatus === 'Day Off'
         return true
       })
-  }, [calendarCells, tableFilter])
+  }, [calendarCells, tableFilter, todayIso])
 
   // Resolve department name
   const departmentName = useMemo(() => {
@@ -422,7 +437,7 @@ export default function EmployeeReport() {
       'Remarks',
     ]
     const data = tableRows.map((r) => [
-      isBs ? (r.dateBs || r.dateIso) : r.dateIso,
+      isBs ? bsDmy(r.dateBs) || dmy(r.dateIso) : dmy(r.dateIso),
       r.weekday || '',
       r.resolvedStatus || '',
       r.firstIn || '',
@@ -439,57 +454,29 @@ export default function EmployeeReport() {
     XLSX.writeFile(wb, `${empName}_Attendance_${period}.xlsx`)
   }
 
-  // Render iconic status matching Attendance page format
+  // Status uses the same P / A / H / O notation as the attendance grid, so the
+  // two screens read alike. The star and calendar glyphs that used to be here
+  // looked decorative rather than like data.
   function renderTableStatus(status, holidayName) {
-    if (status === 'Present') {
-      return (
-        <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700" title="Present">
-          <svg className="h-4 w-4 text-emerald-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="9" />
-            <path d="m8.5 12.5 2.5 2.5 4.5-5" />
-          </svg>
-          <span>Present</span>
-        </span>
-      )
-    }
-    if (status === 'Absent') {
-      return (
-        <span className="inline-flex items-center gap-1.5 font-medium text-rose-600" title="Absent">
-          <svg className="h-4 w-4 text-rose-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="9" />
-            <path d="m15 9-6 6m0-6 6 6" />
-          </svg>
-          <span>Absent</span>
-        </span>
-      )
-    }
-    if (status === 'Half Day') {
-      return (
-        <span className="inline-flex items-center gap-1.5 font-medium text-amber-600" title="Half Day">
-          <svg className="h-4 w-4 text-amber-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 7v5l3 3" />
-          </svg>
-          <span>Half Day</span>
-        </span>
-      )
-    }
-    if (status === 'Holiday') {
-      return (
-        <span className="inline-flex items-center gap-1.5 font-medium text-amber-700" title={holidayName || 'Holiday'}>
-          <FaStar className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-          <span className="truncate max-w-[90px]">{holidayName || 'Holiday'}</span>
-        </span>
-      )
-    }
-    // Day Off
+    const label =
+      status === 'Holiday' ? (holidayName || 'Holiday')
+        : status === 'Day Off' ? 'Weekly off'
+          : status === 'Upcoming' ? 'Not due yet'
+            : status === 'Not Joined' ? 'Before joining'
+              : status
+
+    const tone =
+      status === 'Present' ? 'text-emerald-700'
+        : status === 'Half Day' ? 'text-amber-700'
+          : status === 'Absent' ? 'text-rose-600'
+            : status === 'Holiday' ? 'text-violet-700'
+              : status === 'Day Off' ? 'text-slate-500'
+                : 'text-slate-400'
+
     return (
-      <span className="inline-flex items-center gap-1.5 font-medium text-sky-600" title={holidayName || 'Day Off'}>
-        <svg className="h-4 w-4 text-sky-500 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect width="18" height="18" x="3" y="4" rx="2" />
-          <path d="M16 2v4M8 2v4M3 10h18" />
-        </svg>
-        <span>Day Off</span>
+      <span className={`inline-flex items-center gap-2 font-medium ${tone}`} title={label}>
+        <StatusMark status={status} />
+        <span className="max-w-[110px] truncate">{label}</span>
       </span>
     )
   }
@@ -814,7 +801,7 @@ export default function EmployeeReport() {
                 <span>Absent</span>
               </span>
               <span className="inline-flex items-center gap-1 text-amber-600 font-medium">
-                <FaStar className="h-2.5 w-2.5 text-amber-500" />
+                <span className="text-[9px] font-bold text-violet-600">H</span>
                 <span>Holiday</span>
               </span>
               <span className="inline-flex items-center gap-1 text-sky-600 font-medium">
@@ -895,7 +882,7 @@ export default function EmployeeReport() {
                           ) : isWeeklyOff || cell?.status === 'Day Off' || cell?.status === 'Weekly off' ? (
                             <span className="h-1.5 w-1.5 rounded-full bg-sky-400 shrink-0" title="Day Off" />
                           ) : isHoliday || cell?.status === 'Holiday' ? (
-                            <FaStar className="h-2 w-2 text-amber-400 shrink-0" title={meta?.holidayName || 'Holiday'} />
+                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" title={meta?.holidayName || 'Holiday'} />
                           ) : cell?.status === 'Half Day' || (cell?.hours > 0 && cell?.hours < 4) ? (
                             <span className="h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" title="Half Day" />
                           ) : null}
@@ -990,7 +977,7 @@ export default function EmployeeReport() {
               {tableRows.map((r) => (
                 <tr key={r.dateIso} className="hover:bg-slate-50/70 transition-colors">
                   <td className="px-3.5 py-2 font-medium text-slate-800 whitespace-nowrap font-mono">
-                    {isBs ? (r.dateBs || r.dateIso) : r.dateIso}
+                    {isBs ? bsDmy(r.dateBs) || dmy(r.dateIso) : dmy(r.dateIso)}
                   </td>
                   <td className="px-3 py-2 text-slate-500 whitespace-nowrap">
                     {r.weekday}

@@ -396,6 +396,134 @@ A plain `AddAttendanceApprovals.sql` is included as an alternative, and is safe 
 - **The page no longer sits on "Loading..." under an error banner.** The failure path never set
   state, so the card stayed in its loading placeholder for ever, which is what the screenshot showed.
 
+## Daily automation, emails and the monthly cross-tab
+
+Built to the spec, with the architecture it asks for: Hangfire decides *when*, `DailyAttendanceService` decides *what*. The business logic exists once and both the schedule and the admin buttons call it.
+
+### The part that is easy to get wrong
+
+The report is driven by the **employee list**, with attendance joined onto it, never the reverse. Querying attendance records alone silently omits the people who never scanned, who are exactly the ones the report exists to surface. Hari does not disappear.
+
+Punches whose enrol number matches nobody are collected into `UnmappedDeviceIds` and shown in the admin summary, rather than being dropped.
+
+### Statuses
+
+| Status | Rule |
+|---|---|
+| Present | Checked in within grace, and checked out |
+| Late | Checked in after grace |
+| Partial | Only one scan, usually a forgotten check-out |
+| Absent | No scan on a working day |
+| Holiday | Weekly off or declared holiday |
+| Not joined | Date is before the hire date |
+
+Thresholds come from the Settings page you already have, so nothing is hardcoded and the two screens cannot disagree.
+
+### Emails
+
+One email per person, never a combined list. Templates match the spec's four cases. A bad address fails that recipient and the run continues.
+
+SMTP config lives in `SystemSettings` under category `Email`, not `appsettings.json`. Until it is filled in, the endpoints say so rather than throwing, and the send button is disabled with a tooltip.
+
+### Monthly Report page
+
+Cross-tab with employees down and dates across, P / L / PT / A / H marks, per-employee totals, department filter, AD and BS date headers, and **Excel export** named `attendance_summary_<from>_to_<to>.xlsx`. Export uses the `xlsx` package already in your dependencies, so nothing new was installed.
+
+Admin buttons on the same page: **Process today's attendance** and **Send attendance emails**, both calling the same service the job does.
+
+### New endpoints
+
+```
+GET  /api/Attendance/daily/report?date=
+GET  /api/Attendance/daily/monthly?from=&to=
+POST /api/Attendance/daily/process?date=&sendEmails=
+POST /api/Attendance/daily/send-emails?date=
+GET  /api/Attendance/daily/email-status
+```
+
+### Hangfire
+
+Now wired into the solution. Nothing to paste.
+
+| Piece | File |
+|---|---|
+| The job | `ZKAttendance.Api/Jobs/AttendanceDailyJob.cs` |
+| Dashboard guard | `ZKAttendance.Api/Security/HangfireAdminFilter.cs` |
+| Services, dashboard, schedule | `ZKAttendance.Api/Program.cs` |
+| Packages | `ZKAttendance.Api.csproj` (Hangfire.AspNetCore + Hangfire.SqlServer 1.8.14) |
+
+Runs at **17:30, Sunday to Friday** (`"30 17 * * 0-5"`). Saturday is the weekly off, so it is skipped. Timezone resolves `Nepal Standard Time`, falls back to `Asia/Kathmandu`, then to server local, so it registers on Windows or Linux.
+
+Four decisions worth knowing:
+
+- **The job is thin.** It calls `IDailyAttendanceService.RunEndOfDayAsync`, the same service the admin buttons use. The logic is not duplicated.
+- **The date resolves inside the job**, not in the schedule. Passing `DateTime.Today` into `RecurringJob.AddOrUpdate` would freeze it at app-start and reprocess that same day for ever. That is the classic Hangfire mistake.
+- **One worker**, plus `DisableConcurrentExecution`. The job emails in a loop; two copies would send duplicates.
+- **Two retries, not the default ten.** Retrying a partly-completed email run re-sends to everyone who already got one.
+
+**These three files are the only code in this release that has not been compiled**, because NuGet was unreachable in the build environment. Let NuGet restore on first open. Everything else compiles clean.
+
+## Email uniqueness
+
+Now that attendance emails go out, a shared address is a privacy leak rather than untidy data: one employee would receive another's check-in times.
+
+**Four layers, deliberately:**
+
+1. **`UX_Employee_Email`** — unique index on `Employees.Email`, filtered on `IS NOT NULL`. Without the filter the NULL rows collide and only one employee could ever have a blank address. `ApiUsers.Email` was already unique.
+2. **Normalisation on write.** `Email` is trimmed, and blank becomes `NULL`. `" ram@x.com "` and `"ram@x.com"` are one address to a person but two values to an index. Case is already handled: SQL Server's default collation is case-insensitive.
+3. **A guard on create and update** returning a sentence, so a duplicate never surfaces as a unique-index violation dressed up as a 500.
+4. **A runtime check in the mail run.** If two employees somehow share an address, **both** are skipped and the reason is reported. Guessing which one owns it would be worse than sending nothing.
+
+### Run this before Update-Database
+
+`ZKAttendance.Infrastructure/Migrations/CheckDuplicateEmails.sql`
+
+The index **will fail to create** if duplicates already exist, and SQL Server's error names the table but not the people. The script lists exactly who shares what, plus addresses differing only by case or whitespace, plus blank-not-null values.
+
+It auto-fixes the safe cases (trim, blank to NULL). It deliberately does **not** auto-fix genuine duplicates: two people on one address is either a typo or a shared family address, and blanking the wrong one silently stops that person's emails. Decide per pair.
+
+An employee with no email is skipped by the mail run and counted under "Skipped". Nothing fails.
+
+## Fix: future days showing Absent on the Employee Report
+
+The Day-by-Day Attendance Log was painting the rest of the month red. The overview grid had already been fixed for this, but `EmployeeReport.jsx` computes its own status and was missed.
+
+The cause was one line:
+
+```js
+let resolvedStatus = 'Absent'   // then override if recognised
+```
+
+Absent was the **default**, so anything the chain did not explicitly recognise fell through to it, including the `Upcoming` status the server sends for days that have not finished. Now the default is `Upcoming`, and Absent is set only when the server says so, or when a past working day genuinely has no record.
+
+The monthly summary counters had the same problem in reverse: future days were incrementing `workingDays`, inflating the denominator. They are now skipped until the day closes.
+
+### Also fixed on this page, which had been missed earlier
+
+- **Star and calendar glyphs replaced** with the shared P / A / H / O notation, so this screen reads like the attendance grid instead of having its own icon language.
+- **Dates were still printing as `2026-09-01`** in both the table and the Excel export. Now dd/mm/yyyy like everywhere else.
+
+## Email configuration UI
+
+The "Email is not configured" banner had no way to clear it from the app, which was an omission on my part. Settings now has an **Email (SMTP)** card.
+
+- Host, port, username, password, from-address, from-name, SSL toggle
+- A **Configured / Not configured** badge
+- **Send test** button, so one message proves it works before the end-of-day job tries two hundred
+
+Two details that matter:
+
+- **The password is never sent back to the browser.** The endpoint returns only `passwordIsSet`. Leaving the field blank on save keeps the stored one, so re-saving the form does not wipe it.
+- **The test endpoint passes the SMTP error through verbatim.** "Authentication failed" or "relay denied" tells you what to fix; a generic "sending failed" does not.
+
+Admin only. Settings are cached for five minutes, but saving drops the cache immediately.
+
+## Removed: orphan audit and tenancy entities
+
+`AuditAndTenancyEntities.cs` held `AuditLog`, `Company` and `AttendanceLogArchive`. They were created as a first step towards the security review items, then never mapped in the DbContext, so they produced no tables and did nothing. Dead code that looked like a feature is worse than no code, so they are gone.
+
+The underlying needs have not gone away, and are listed under Still open below.
+
 ## Still open
 
 - **Leave types** — not started.
@@ -403,3 +531,8 @@ A plain `AddAttendanceApprovals.sql` is included as an alternative, and is safe 
   but late-arrival and OT flags are not implemented.
 - **Device clock drift** — read by `GetDeviceInfoAsync`, not surfaced in the UI.
 - **Punch correction with audit trail** — manual punches are flagged, but there is no edit trail.
+- **Audit log** — no record of who approved, rejected or edited what. Attendance decides pay, so "the system says you were absent" should be answerable with a record. This is the most worthwhile of the security items.
+- **Fingerprint templates stored unencrypted** in `FingerprintTemplates.TemplateData`.
+- **SMTP password stored in plain text** in `SystemSettings`. Use a send-only app password so a leak cannot read the mailbox.
+- **Attendance log retention** — `AttendanceLogs` grows without bound and is scanned on every grid load. Roughly 290,000 rows a year for 200 employees.
+- **No tenant isolation** — single-company only.

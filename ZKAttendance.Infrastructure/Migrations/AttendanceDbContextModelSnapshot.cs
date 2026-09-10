@@ -85,57 +85,6 @@ namespace ZKAttendance.Infrastructure.Migrations
                     b.ToTable("ApiUsers");
                 });
 
-            modelBuilder.Entity("ZKAttendance.Domain.Entities.AttendanceApproval", b =>
-                {
-                    b.Property<int>("ApprovalId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ApprovalId"));
-
-                    b.Property<DateTime>("AttendanceDate")
-                        .HasColumnType("date");
-
-                    b.Property<DateTime>("CreatedDate")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("datetime2")
-                        .HasDefaultValueSql("GETDATE()");
-
-                    b.Property<string>("DecidedBy")
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
-
-                    b.Property<DateTime?>("DecidedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("EmployeeId")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("FirstCheckIn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("MinutesLate")
-                        .HasColumnType("int");
-
-                    b.Property<string>("Note")
-                        .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
-
-                    b.Property<int>("Status")
-                        .HasColumnType("int");
-
-                    b.HasKey("ApprovalId");
-
-                    b.HasIndex("EmployeeId", "AttendanceDate")
-                        .IsUnique()
-                        .HasDatabaseName("IX_AttendanceApproval_Employee_Date");
-
-                    b.HasIndex("Status", "AttendanceDate")
-                        .HasDatabaseName("IX_AttendanceApproval_Status_Date");
-
-                    b.ToTable("AttendanceApprovals");
-                });
-
             modelBuilder.Entity("ZKAttendance.Domain.Entities.AttendanceLog", b =>
                 {
                     b.Property<long>("LogId")
@@ -1255,17 +1204,6 @@ namespace ZKAttendance.Infrastructure.Migrations
                         .HasDatabaseName("IX_WorkShift_Name");
 
                     b.ToTable("WorkShifts");
-                });
-
-            modelBuilder.Entity("ZKAttendance.Domain.Entities.AttendanceApproval", b =>
-                {
-                    b.HasOne("ZKAttendance.Domain.Entities.Employee", "Employee")
-                        .WithMany()
-                        .HasForeignKey("EmployeeId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Employee");
                 });
 
             modelBuilder.Entity("ZKAttendance.Domain.Entities.AttendanceLog", b =>

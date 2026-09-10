@@ -151,6 +151,25 @@ namespace ZKAttendance.Infrastructure.Persistence
                       .HasForeignKey(e => e.DefaultShiftId)
                       .OnDelete(DeleteBehavior.Restrict);
 
+                // Email must identify exactly one person.
+                //
+                // Attendance emails are personal: two employees sharing an
+                // address means one of them receives the other's check-in
+                // times, which is both a privacy leak and a support call.
+                //
+                // Filtered, because email is optional. Without the filter the
+                // many NULL rows would collide with each other and only one
+                // employee could ever have a blank address.
+                //
+                // SQL Server's default collation is case-insensitive, so
+                // 'Ram@x.com' and 'ram@x.com' already count as the same. The
+                // API trims on write, which handles the trailing-space case
+                // the collation does not.
+                entity.HasIndex(e => e.Email)
+                      .IsUnique()
+                      .HasFilter("[Email] IS NOT NULL")
+                      .HasDatabaseName("UX_Employee_Email");
+
                 // CHANGED: no longer unique.
                 // The biometric ID is a fact about a person on a particular
                 // device, not about the person globally. A unique index here

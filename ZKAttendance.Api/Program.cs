@@ -1,6 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using ZKAttendance.Infrastructure.Persistence;
 using ZKAttendance.Infrastructure.Services.Attendance;
+using ZKAttendance.Infrastructure.Services.Notifications;
+using Hangfire;
+using Hangfire.SqlServer;
+using ZKAttendance.Api.Jobs;
 using ZKAttendance.Infrastructure.Persistence.Repositories;
 using ZKAttendance.Infrastructure.Services.Attendances;
 using ZKAttendance.Application.Services.Attendances;
@@ -157,6 +161,46 @@ builder.Services.AddScoped<IDeviceEnrollmentOrchestrator, DeviceEnrollmentOrches
 // editable from the Settings screen, so no redeploy to change them.
 builder.Services.AddScoped<IAttendancePolicyService, AttendancePolicyService>();
 
+// End-of-day processing. This service is called by BOTH the admin buttons and
+// the scheduled job, so the automatic and manual runs cannot drift apart.
+builder.Services.AddScoped<IDailyAttendanceService, DailyAttendanceService>();
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
+
+// ═══════════════════════════════════════════════════════
+// Hangfire: scheduling only
+//
+// Hangfire decides WHEN. AttendanceDailyJob is a thin wrapper whose only job
+// is to call IDailyAttendanceService, which is the same service the admin
+// buttons call. The business logic is not duplicated here.
+//
+// Hangfire creates its own tables in the same database on first run, so no
+// migration is needed for it.
+// ═══════════════════════════════════════════════════════
+builder.Services.AddHangfire(config => config
+    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UseSqlServerStorage(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        new SqlServerStorageOptions
+        {
+            // Left at the defaults, Hangfire polls the database every second.
+            QueuePollInterval = TimeSpan.FromSeconds(15),
+            SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+            UseRecommendedIsolationLevel = true,
+            DisableGlobalLocks = true
+        }));
+
+builder.Services.AddHangfireServer(options =>
+{
+    // One worker on purpose. The end-of-day job sends email in a loop, and two
+    // copies running at once would send every employee duplicates.
+    options.WorkerCount = 1;
+    options.ServerName = $"zkattendance-{Environment.MachineName}";
+});
+
+builder.Services.AddScoped<AttendanceDailyJob>();
+
 // ═══════════════════════════════════════════════════════
 // Authentication: JWT Bearer only.
 // The SPA holds a short-lived access token and a rotating refresh token;
@@ -273,6 +317,42 @@ app.UseCors(SpaCorsPolicy);
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Dashboard is Admin only. Hangfire allows everyone when no filter is given,
+// which would let any visitor trigger the attendance email job.
+app.UseHangfireDashboard("/hangfire", new DashboardOptions
+{
+    Authorization = new[] { new ZKAttendance.Api.Security.HangfireAdminFilter() }
+});
+
+// End of day, Sunday to Friday. Saturday is the weekly off in Nepal, so the
+// job would find nothing to do.
+//
+// The job resolves DateTime.Today itself at run time. Passing a date in here
+// would freeze it at whatever it was when the app last started, and the same
+// day would be reprocessed for ever.
+RecurringJob.AddOrUpdate<AttendanceDailyJob>(
+    "daily-attendance",
+    job => job.RunEndOfDayAsync(CancellationToken.None),
+    "30 17 * * 0-5",
+    new RecurringJobOptions
+    {
+        // Windows uses "Nepal Standard Time"; Linux containers use
+        // "Asia/Kathmandu". Falling back keeps this working on both.
+        TimeZone = ResolveNepalTimeZone()
+    });
+
+static TimeZoneInfo ResolveNepalTimeZone()
+{
+    foreach (var id in new[] { "Nepal Standard Time", "Asia/Kathmandu" })
+    {
+        try { return TimeZoneInfo.FindSystemTimeZoneById(id); }
+        catch (TimeZoneNotFoundException) { }
+        catch (InvalidTimeZoneException) { }
+    }
+    // Better a job that runs on server time than one that never registers.
+    return TimeZoneInfo.Local;
+}
 
 app.MapControllers();
 

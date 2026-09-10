@@ -52,10 +52,29 @@ export const employees = {
   updatePhoto: (id, photoUrl) => api.patch(`/Employees/${id}/photo`, { photoUrl }).then(r => r.data),
 }
 
+// ── Daily processing, reports and the manual job triggers ────
+// Every one of these calls the same service the scheduled job uses.
+export const dailyAttendance = {
+  report: (params) => get('/Attendance/daily/report', params),
+  monthly: (params) => get('/Attendance/daily/monthly', params),
+  process: (sendEmails = false, date) => {
+    const q = new URLSearchParams()
+    if (date) q.set('date', date)
+    q.set('sendEmails', String(sendEmails))
+    return post(`/Attendance/daily/process?${q}`)
+  },
+  sendEmails: (date) =>
+    post(`/Attendance/daily/send-emails${date ? `?date=${date}` : ''}`),
+  emailStatus: () => get('/Attendance/daily/email-status'),
+}
+
 // ── Office hours and late-arrival approvals ──────────────────
 export const settings = {
   attendance: () => get('/Settings/attendance'),
   saveAttendance: (body) => put('/Settings/attendance', body),
+  email: () => get('/Settings/email'),
+  saveEmail: (body) => put('/Settings/email', body),
+  testEmail: (to) => post(`/Settings/email/test?to=${encodeURIComponent(to)}`),
 }
 
 export const approvals = {
