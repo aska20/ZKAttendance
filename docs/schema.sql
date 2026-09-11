@@ -127,6 +127,12 @@ CREATE TABLE Employees (
 CREATE INDEX IX_Employee_BiometricUserId ON Employees (BiometricUserId);
 CREATE INDEX IX_Employee_Department ON Employees (DepartmentId);
 
+-- Email must identify exactly one person: attendance emails are personal, so a
+-- shared address would send one employee another's check-in times.
+-- Filtered because email is optional; without the filter the NULL rows would
+-- collide and only one employee could ever have a blank address.
+CREATE UNIQUE INDEX UX_Employee_Email ON Employees (Email) WHERE Email IS NOT NULL;
+
 
 -- Which branches a person may attend at. Many-to-many.
 CREATE TABLE EmployeeBranches (

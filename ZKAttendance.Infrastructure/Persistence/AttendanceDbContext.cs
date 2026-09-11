@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using ZKAttendance.Domain.Entities;
 
 namespace ZKAttendance.Infrastructure.Persistence
@@ -46,6 +46,9 @@ namespace ZKAttendance.Infrastructure.Persistence
         public DbSet<RefreshToken> RefreshTokens { get; set; }
 
         public DbSet<Notification> Notifications { get; set; }
+
+        // Agent registration
+        public DbSet<LocalServer> LocalServers { get; set; }
 
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -151,6 +154,25 @@ namespace ZKAttendance.Infrastructure.Persistence
                       .HasForeignKey(e => e.DefaultShiftId)
                       .OnDelete(DeleteBehavior.Restrict);
 
+                // Email must identify exactly one person.
+                //
+                // Attendance emails are personal: two employees sharing an
+                // address means one of them receives the other's check-in
+                // times, which is both a privacy leak and a support call.
+                //
+                // Filtered, because email is optional. Without the filter the
+                // many NULL rows would collide with each other and only one
+                // employee could ever have a blank address.
+                //
+                // SQL Server's default collation is case-insensitive, so
+                // 'Ram@x.com' and 'ram@x.com' already count as the same. The
+                // API trims on write, which handles the trailing-space case
+                // the collation does not.
+                entity.HasIndex(e => e.Email)
+                      .IsUnique()
+                      .HasFilter("[Email] IS NOT NULL")
+                      .HasDatabaseName("UX_Employee_Email");
+
                 // CHANGED: no longer unique.
                 // The biometric ID is a fact about a person on a particular
                 // device, not about the person globally. A unique index here
@@ -229,6 +251,28 @@ namespace ZKAttendance.Infrastructure.Persistence
                 entity.HasIndex(e => e.Status)
                       .HasDatabaseName("IX_SyncLog_Status");
             });
+
+            // ═════════════════════════════════════════════════════
+            // LocalServers Configuration
+            // ═════════════════════════════════════════════════════
+            modelBuilder.Entity<LocalServer>(entity =>
+            {
+                entity.HasKey(e => e.LocalServerId);
+                entity.Property(e => e.LocalServerId).ValueGeneratedOnAdd();
+                entity.Property(e => e.CreatedDate).HasDefaultValueSql("GETDATE()");
+                entity.Property(e => e.IsActive).HasDefaultValue(true);
+
+                // AgentKey must be unique so App1 can look up the agent in O(log n).
+                entity.HasIndex(e => e.AgentKey)
+                      .IsUnique()
+                      .HasDatabaseName("UX_LocalServer_AgentKey");
+
+                entity.HasOne(e => e.Branch)
+                      .WithMany()
+                      .HasForeignKey(e => e.BranchId)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+
 
             // ═════════════════════════════════════════════════════
             // DeviceStatus Configuration
@@ -515,6 +559,20 @@ namespace ZKAttendance.Infrastructure.Persistence
                       .OnDelete(DeleteBehavior.Cascade);
 
                 entity.HasIndex(e => e.Token).IsUnique().HasDatabaseName("UX_RefreshToken_Token");
+            });
+
+            // ═════════════════════════════════════════════════════════════
+            // LocalServer - registered remote agents (App2)
+            // ═════════════════════════════════════════════════════════════
+            modelBuilder.Entity<LocalServer>(entity =>
+            {
+                entity.HasKey(e => e.LocalServerId);
+                entity.HasIndex(e => e.AgentKey).IsUnique().HasDatabaseName("UX_LocalServer_AgentKey");
+
+                entity.HasOne(e => e.Branch)
+                      .WithMany()
+                      .HasForeignKey(e => e.BranchId)
+                      .OnDelete(DeleteBehavior.Restrict);
             });
         }
     }

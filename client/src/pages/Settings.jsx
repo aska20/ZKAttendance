@@ -22,11 +22,34 @@ export default function Settings() {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
+  const [mail, setMail] = useState(null)
+  const [mailError, setMailError] = useState('')
+  const [testTo, setTestTo] = useState('')
+  const [mailBusy, setMailBusy] = useState('')
+
   useEffect(() => {
     api
       .attendance()
       .then(setForm)
       .catch((e) => setError(apiErrorMessage(e)))
+
+    api
+      .email()
+      // password is never sent back, so track it separately
+      .then((m) => {
+        setMail({ ...m, password: '' })
+        setMailError('')
+      })
+      .catch((e) => {
+        // Hiding the card on failure meant the section simply vanished with no
+        // explanation, which is worse than showing the reason.
+        setMail(null)
+        setMailError(
+          e?.response?.status === 404
+            ? 'The email settings endpoint was not found. The API is running an older build, so rebuild and restart it.'
+            : apiErrorMessage(e),
+        )
+      })
   }, [])
 
   const set = (key) => (value) => setForm((f) => ({ ...f, [key]: value }))
@@ -55,11 +78,43 @@ export default function Settings() {
     }
   }
 
+  const setMailField = (key) => (value) => setMail((m) => ({ ...m, [key]: value }))
+
+  async function saveMail(e) {
+    e.preventDefault()
+    setMailBusy('save')
+    try {
+      const res = await api.saveEmail(mail)
+      setMail((m) => ({ ...m, password: '', passwordIsSet: m.password ? true : m.passwordIsSet, configured: res.configured }))
+      fb.success(res.message)
+    } catch (err) {
+      fb.error(apiErrorMessage(err))
+    } finally {
+      setMailBusy('')
+    }
+  }
+
+  async function sendTest() {
+    if (!testTo.trim()) {
+      fb.error('Enter an address to send the test to.')
+      return
+    }
+    setMailBusy('test')
+    try {
+      const res = await api.testEmail(testTo.trim())
+      fb.success(res.message)
+    } catch (err) {
+      fb.error(apiErrorMessage(err))
+    } finally {
+      setMailBusy('')
+    }
+  }
+
   if (error) return <ErrorText>{error}</ErrorText>
   if (!form) return <p className="text-sm text-slate-400">Loading...</p>
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-6xl">
       <PageHeader title="Settings" subtitle="Office hours and attendance rules" />
 
       <form onSubmit={save} className="space-y-4">
@@ -92,6 +147,7 @@ export default function Settings() {
           </Card>
         )}
 
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card className="p-5">
           <h2 className="text-sm font-semibold text-slate-900">Office hours</h2>
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -143,9 +199,9 @@ export default function Settings() {
           </div>
         </Card>
 
-        <Card className="p-5">
+        <Card className="p-5 lg:col-span-2">
           <h2 className="text-sm font-semibold text-slate-900">Marking absent</h2>
-          <div className="mt-4 space-y-4">
+          <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-x-8">
             <NumberField
               label="Wait after end time"
               unit="minutes"
@@ -168,6 +224,7 @@ export default function Settings() {
             />
           </div>
         </Card>
+        </div>
 
         {isAdmin ? (
           <div className="flex justify-end gap-2">
@@ -179,7 +236,137 @@ export default function Settings() {
           <p className="text-xs text-slate-500">Only an admin can change these.</p>
         )}
       </form>
+
+      {/* Email. Needed before any attendance email can go out. */}
+      {isAdmin && !mail && (
+        <Card className="mt-4 p-5">
+          <h2 className="text-sm font-semibold text-slate-900">Email (SMTP)</h2>
+          <p className="mt-2 text-sm text-amber-800">
+            {mailError || 'Loading...'}
+          </p>
+        </Card>
+      )}
+
+      {!isAdmin && (
+        <Card className="mt-4 p-5">
+          <h2 className="text-sm font-semibold text-slate-900">Email (SMTP)</h2>
+          <p className="mt-2 text-sm text-slate-500">
+            Only an admin can view or change the email settings.
+          </p>
+        </Card>
+      )}
+
+      {isAdmin && mail && (
+        <form onSubmit={saveMail} className="mt-4 space-y-4">
+          <Card className="p-5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold text-slate-900">Email (SMTP)</h2>
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ${
+                  mail.configured
+                    ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+                    : 'bg-amber-50 text-amber-700 ring-amber-200'
+                }`}
+              >
+                {mail.configured ? 'Configured' : 'Not configured'}
+              </span>
+            </div>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Used for the daily attendance emails. For Gmail use an app password.
+            </p>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <TextField
+                label="SMTP host"
+                value={mail.smtpHost || ''}
+                onChange={setMailField('smtpHost')}
+                placeholder="smtp.gmail.com"
+              />
+              <TextField
+                label="Port"
+                type="number"
+                value={mail.smtpPort ?? 587}
+                onChange={(v) => setMailField('smtpPort')(Number(v))}
+                placeholder="587"
+              />
+              <TextField
+                label="Username"
+                value={mail.username || ''}
+                onChange={setMailField('username')}
+                placeholder="attendance@company.com"
+              />
+              <TextField
+                label={mail.passwordIsSet ? 'Password (leave blank to keep)' : 'Password'}
+                type="password"
+                value={mail.password || ''}
+                onChange={setMailField('password')}
+                placeholder={mail.passwordIsSet ? '••••••••' : 'app password'}
+              />
+              <TextField
+                label="From address"
+                value={mail.fromAddress || ''}
+                onChange={setMailField('fromAddress')}
+                placeholder="attendance@company.com"
+              />
+              <TextField
+                label="From name"
+                value={mail.fromName || ''}
+                onChange={setMailField('fromName')}
+                placeholder="Attendance System"
+              />
+            </div>
+
+            <div className="mt-4">
+              <Toggle
+                label="Use SSL/TLS"
+                checked={mail.useSsl !== false}
+                onChange={setMailField('useSsl')}
+                hint="Leave on for port 587 or 465"
+              />
+            </div>
+
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="email"
+                  value={testTo}
+                  onChange={(e) => setTestTo(e.target.value)}
+                  placeholder="you@company.com"
+                  className="input w-56"
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={sendTest}
+                  disabled={Boolean(mailBusy) || !mail.configured}
+                  title={mail.configured ? undefined : 'Save the settings first'}
+                >
+                  {mailBusy === 'test' ? 'Sending...' : 'Send test'}
+                </Button>
+              </div>
+              <Button type="submit" disabled={Boolean(mailBusy)}>
+                {mailBusy === 'save' ? 'Saving...' : 'Save email settings'}
+              </Button>
+            </div>
+          </Card>
+        </form>
+      )}
     </div>
+  )
+}
+
+function TextField({ label, value, onChange, placeholder, type = 'text' }) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-sm font-medium text-slate-700">{label}</span>
+      <input
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        className="input w-full"
+      />
+    </label>
   )
 }
 
@@ -222,12 +409,12 @@ function TimeField({ label, value, onChange, disabled }) {
 
 function NumberField({ label, unit, value, onChange, min, max, step = 1, disabled, hint }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="grid grid-cols-1 items-center gap-x-4 gap-y-1 sm:grid-cols-[1fr_auto]">
       <div className="min-w-0">
         <div className="text-sm font-medium text-slate-700">{label}</div>
         {hint && <div className="text-xs tabular-nums text-slate-400">{hint}</div>}
       </div>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex items-center gap-2 sm:justify-self-end">
         <input
           type="number"
           value={value}
@@ -236,9 +423,9 @@ function NumberField({ label, unit, value, onChange, min, max, step = 1, disable
           step={step}
           disabled={disabled}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="input w-24 text-right tabular-nums disabled:bg-slate-50 disabled:text-slate-500"
+          className="input w-20 text-right tabular-nums disabled:bg-slate-50 disabled:text-slate-500"
         />
-        <span className="w-28 text-xs text-slate-500">{unit}</span>
+        <span className="w-24 shrink-0 text-xs text-slate-500">{unit}</span>
       </div>
     </div>
   )
@@ -246,7 +433,7 @@ function NumberField({ label, unit, value, onChange, min, max, step = 1, disable
 
 function Toggle({ label, checked, onChange, disabled, hint }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="flex items-center justify-between gap-4">
       <div className="min-w-0">
         <div className="text-sm font-medium text-slate-700">{label}</div>
         {hint && <div className="text-xs tabular-nums text-slate-400">{hint}</div>}

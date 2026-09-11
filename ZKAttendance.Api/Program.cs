@@ -1,6 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using ZKAttendance.Infrastructure.Persistence;
 using ZKAttendance.Infrastructure.Services.Attendance;
+using ZKAttendance.Infrastructure.Services.Notifications;
+using Hangfire;
+using Hangfire.SqlServer;
+using ZKAttendance.Api.Jobs;
 using ZKAttendance.Infrastructure.Persistence.Repositories;
 using ZKAttendance.Infrastructure.Services.Attendances;
 using ZKAttendance.Application.Services.Attendances;
@@ -17,8 +21,6 @@ using ZKAttendance.Infrastructure.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using Hangfire;
-using Hangfire.SqlServer;
 using ZKAttendance.Api.Security;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -189,6 +191,45 @@ builder.Services.AddScoped<IDeviceEnrollmentOrchestrator, DeviceEnrollmentOrches
 // editable from the Settings screen, so no redeploy to change them.
 builder.Services.AddScoped<IAttendancePolicyService, AttendancePolicyService>();
 
+// End-of-day processing. This service is called by BOTH the admin buttons and
+// the scheduled job, so the automatic and manual runs cannot drift apart.
+builder.Services.AddScoped<IDailyAttendanceService, DailyAttendanceService>();
+
+// ═══════════════════════════════════════════════════════
+// Hangfire: scheduling only
+//
+// Hangfire decides WHEN. AttendanceDailyJob is a thin wrapper whose only job
+// is to call IDailyAttendanceService, which is the same service the admin
+// buttons call. The business logic is not duplicated here.
+//
+// Hangfire creates its own tables in the same database on first run, so no
+// migration is needed for it.
+// ═══════════════════════════════════════════════════════
+builder.Services.AddHangfire(config => config
+    .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+    .UseSimpleAssemblyNameTypeSerializer()
+    .UseRecommendedSerializerSettings()
+    .UseSqlServerStorage(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        new SqlServerStorageOptions
+        {
+            // Left at the defaults, Hangfire polls the database every second.
+            QueuePollInterval = TimeSpan.FromSeconds(15),
+            SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+            UseRecommendedIsolationLevel = true,
+            DisableGlobalLocks = true
+        }));
+
+builder.Services.AddHangfireServer(options =>
+{
+    // One worker on purpose. The end-of-day job sends email in a loop, and two
+    // copies running at once would send every employee duplicates.
+    options.WorkerCount = 1;
+    options.ServerName = $"zkattendance-{Environment.MachineName}";
+});
+
+builder.Services.AddScoped<AttendanceDailyJob>();
+
 // ═══════════════════════════════════════════════════════
 // Authentication: JWT Bearer only.
 // The SPA holds a short-lived access token and a rotating refresh token;
@@ -306,47 +347,42 @@ app.UseCors(SpaCorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
 
-// ═══════════════════════════════════════════════════════
-// Hangfire Dashboard & Scheduled Recurring Jobs
-// ═══════════════════════════════════════════════════════
+// Dashboard is Admin only. Hangfire allows everyone when no filter is given,
+// which would let any visitor trigger the attendance email job.
 app.UseHangfireDashboard("/hangfire", new DashboardOptions
 {
-    Authorization = new[] { new HangfireAuthorizationFilter() },
-    DashboardTitle = "ZKAttendance Background Jobs"
+    Authorization = new[] { new ZKAttendance.Api.Security.HangfireAdminFilter() }
 });
 
-var recurringJobs = app.Services.GetRequiredService<IRecurringJobManager>();
+// End of day, Sunday to Friday. Saturday is the weekly off in Nepal, so the
+// job would find nothing to do.
+//
+// The job resolves DateTime.Today itself at run time. Passing a date in here
+// would freeze it at whatever it was when the app last started, and the same
+// day would be reprocessed for ever.
+RecurringJob.AddOrUpdate<AttendanceDailyJob>(
+    "daily-attendance",
+    job => job.RunEndOfDayAsync(CancellationToken.None),
+    "30 17 * * 0-5",
+    new RecurringJobOptions
+    {
+        // Windows uses "Nepal Standard Time"; Linux containers use
+        // "Asia/Kathmandu". Falling back keeps this working on both.
+        TimeZone = ResolveNepalTimeZone()
+    });
 
-// 1. Device Attendance Sync (runs every 5 minutes by default if AutoSync is enabled)
-var syncIntervalMinutes = builder.Configuration.GetValue("SyncConfiguration:SyncIntervalMinutes", 5);
-var autoSyncEnabled = builder.Configuration.GetValue("SyncConfiguration:EnableAutoSync", false);
-if (autoSyncEnabled)
+static TimeZoneInfo ResolveNepalTimeZone()
 {
-    recurringJobs.AddOrUpdate<IAttendanceSyncService>(
-        "sync-attendance-devices",
-        service => service.SyncAllDevicesAsync(CancellationToken.None),
-        $"*/{Math.Max(1, syncIntervalMinutes)} * * * *",
-        new RecurringJobOptions { QueueName = "device-sync" });
+    foreach (var id in new[] { "Nepal Standard Time", "Asia/Kathmandu" })
+    {
+        try { return TimeZoneInfo.FindSystemTimeZoneById(id); }
+        catch (TimeZoneNotFoundException) { }
+        catch (InvalidTimeZoneException) { }
+    }
+    // Better a job that runs on server time than one that never registers.
+    return TimeZoneInfo.Local;
 }
 
-// 2. Automated Late Arrival Notification Job (evaluates punches against policy and notifies employees)
-var lateNotificationEnabled = builder.Configuration.GetValue("LateNotificationSettings:Enabled", true);
-var lateCron = builder.Configuration["LateNotificationSettings:CronExpression"] ?? "*/15 * * * *";
-if (lateNotificationEnabled)
-{
-    recurringJobs.AddOrUpdate<IEmployeeLateNotificationService>(
-        "check-late-arrivals",
-        service => service.ProcessTodayLateArrivalsAsync(CancellationToken.None),
-        lateCron,
-        new RecurringJobOptions { QueueName = "default" });
-}
-
-// 3. Daily End-of-Day Attendance Policy Evaluation (23:55 every night)
-recurringJobs.AddOrUpdate<IAttendancePolicyService>(
-    "evaluate-attendance-day",
-    service => service.EvaluateTodayAsync(CancellationToken.None),
-    "55 23 * * *",
-    new RecurringJobOptions { QueueName = "default" });
 
 app.MapControllers();
 

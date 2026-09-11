@@ -255,6 +255,36 @@ namespace ZKAttendance.Api.Controllers
         /// Supplying one that is already taken is rejected — two people sharing
         /// an enrol number would make their punches indistinguishable.
         /// </remarks>
+
+        /// <summary>
+        /// Trim, and treat blank as absent.
+        ///
+        /// "  ram@x.com " and "ram@x.com" are the same address to a person but
+        /// two different values to a unique index, and an empty string is not
+        /// the same as "no email" once the index is filtered on NOT NULL.
+        /// </summary>
+        private static string? NormaliseEmail(string? email)
+            => string.IsNullOrWhiteSpace(email) ? null : email.Trim();
+
+        /// <summary>
+        /// True when another employee already holds this address.
+        ///
+        /// Checked here so the user gets a sentence rather than a unique-index
+        /// violation surfacing as a 500. The index still exists as the real
+        /// guarantee; this is the friendly path, not the enforcement.
+        /// </summary>
+        private async Task<bool> EmailTakenAsync(string? email, int? excludeEmployeeId, CancellationToken ct = default)
+        {
+            if (string.IsNullOrWhiteSpace(email)) return false;
+
+            var normalised = email.Trim().ToLower();
+            return await _db.Employees.AnyAsync(
+                e => e.Email != null
+                     && e.Email.ToLower() == normalised
+                     && (excludeEmployeeId == null || e.EmployeeId != excludeEmployeeId.Value),
+                ct);
+        }
+
         [HttpPost]
         [DisableRequestSizeLimit]
         [ProducesResponseType(201)]
@@ -268,6 +298,13 @@ namespace ZKAttendance.Api.Controllers
             if (await _employees.IsBiometricIdExistsAsync(biometricId))
                 return BadRequest(ApiError.From($"Biometric ID '{biometricId}' is already in use"));
 
+            // Attendance emails are personal, so a shared address would send
+            // one employee another's check-in times.
+            if (await EmailTakenAsync(request.Email, null))
+                return BadRequest(ApiError.From(
+                    $"Email '{request.Email!.Trim()}' already belongs to another employee. " +
+                    "Each person needs their own address so attendance emails reach the right one."));
+
             // Admin → approved immediately. HR → pending an Admin decision.
             var pending = !IsAdmin;
 
@@ -279,7 +316,7 @@ namespace ZKAttendance.Api.Controllers
                 DefaultShiftId = request.DefaultShiftId,
                 PhoneNumber = request.PhoneNumber,
                 Title = request.Title,
-                Email = request.Email,
+                Email = NormaliseEmail(request.Email),
                 SSN = request.SSN,
                 Gender = request.Gender,
                 BirthDate = request.BirthDate,
@@ -473,12 +510,17 @@ namespace ZKAttendance.Api.Controllers
                 existing.BiometricUserId = request.BiometricUserId.Trim();
             }
 
+            if (await EmailTakenAsync(request.Email, id))
+                return BadRequest(ApiError.From(
+                    $"Email '{request.Email!.Trim()}' already belongs to another employee. " +
+                    "Each person needs their own address so attendance emails reach the right one."));
+
             existing.EmployeeName = request.EmployeeName;
             existing.DepartmentId = request.DepartmentId;
             existing.DefaultShiftId = request.DefaultShiftId;
             existing.PhoneNumber = request.PhoneNumber;
             existing.Title = request.Title;
-            existing.Email = request.Email;
+            existing.Email = NormaliseEmail(request.Email);
             existing.SSN = request.SSN;
             existing.Gender = request.Gender;
             existing.BirthDate = request.BirthDate;

@@ -15,14 +15,14 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.NewtonsoftJson" Version="8.0.10" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="8.0.0" />
+    <PackageReference Include="Hangfire.AspNetCore" Version="1.8.18" />
+    <PackageReference Include="Hangfire.SqlServer" Version="1.8.18" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.10" />
     <!-- Design-time only, so `dotnet ef` can run from this project. -->
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.10">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Hangfire.AspNetCore" Version="1.8.18" />
-    <PackageReference Include="Hangfire.SqlServer" Version="1.8.18" />
   </ItemGroup>
 
   <ItemGroup>
