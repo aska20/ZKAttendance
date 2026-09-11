@@ -17,6 +17,7 @@ import Holidays from './pages/Holidays'
 import Settings from './pages/Settings'
 import AttendanceApprovals from './pages/AttendanceApprovals'
 import MonthlyReport from './pages/MonthlyReport'
+import WorkShifts from './pages/WorkShifts'
 import Profile from './pages/Profile'
 import MyAttendance from './pages/MyAttendance'
 import PendingApprovals from './pages/PendingApprovals'
@@ -56,6 +57,7 @@ export default function App() {
         <Route path="holidays" element={<Manager><Holidays /></Manager>} />
         <Route path="attendance/approvals" element={<Manager><AttendanceApprovals /></Manager>} />
         <Route path="attendance/monthly" element={<Manager><MonthlyReport /></Manager>} />
+        <Route path="workshifts" element={<Manager><WorkShifts /></Manager>} />
         <Route path="settings" element={<Manager><Settings /></Manager>} />
         <Route path="errors" element={<Manager><ErrorLog /></Manager>} />
         <Route path="reports/daily" element={<Manager><DailyReport /></Manager>} />

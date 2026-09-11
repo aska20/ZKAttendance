@@ -11,6 +11,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ZKAttendance.Infrastructure
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZKAttendance.Api", "ZKAttendance.Api\ZKAttendance.Api.csproj", "{2277850C-10BF-4EB6-9047-6A35BCCFB4C8}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ZKAttendance.Agent", "ZKAttendance.Agent\ZKAttendance.Agent.csproj", "{B7E4A2C1-9D3F-4A8E-B512-6C7D8E9F0A1B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -69,6 +71,10 @@ Global
 		{2277850C-10BF-4EB6-9047-6A35BCCFB4C8}.Release|x64.Build.0 = Release|Any CPU
 		{2277850C-10BF-4EB6-9047-6A35BCCFB4C8}.Release|x86.ActiveCfg = Release|Any CPU
 		{2277850C-10BF-4EB6-9047-6A35BCCFB4C8}.Release|x86.Build.0 = Release|Any CPU
+		{B7E4A2C1-9D3F-4A8E-B512-6C7D8E9F0A1B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B7E4A2C1-9D3F-4A8E-B512-6C7D8E9F0A1B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B7E4A2C1-9D3F-4A8E-B512-6C7D8E9F0A1B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B7E4A2C1-9D3F-4A8E-B512-6C7D8E9F0A1B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

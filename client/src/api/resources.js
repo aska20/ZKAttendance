@@ -68,6 +68,18 @@ export const dailyAttendance = {
   emailStatus: () => get('/Attendance/daily/email-status'),
 }
 
+// ── Work shifts ──────────────────────────────────────────────
+// A shift's end time decides when that person's day closes, and so when a
+// no-show becomes absent.
+export const workShifts = {
+  list: (includeInactive = false) => get('/WorkShifts', { includeInactive }),
+  get: (id) => get(`/WorkShifts/${id}`),
+  create: (body) => post('/WorkShifts', body),
+  update: (id, body) => put(`/WorkShifts/${id}`, body),
+  remove: (id) => del(`/WorkShifts/${id}`),
+  assign: (employeeIds, shiftId) => post('/WorkShifts/assign', { employeeIds, shiftId }),
+}
+
 // ── Office hours and late-arrival approvals ──────────────────
 export const settings = {
   attendance: () => get('/Settings/attendance'),

@@ -31,6 +31,7 @@ namespace ZKAttendance.Infrastructure.Persistence
         public DbSet<DeviceError> DeviceErrors { get; set; }
         public DbSet<SystemSetting> SystemSettings { get; set; }
         public DbSet<AttendanceApproval> AttendanceApprovals { get; set; }
+        public DbSet<LocalServer> LocalServers { get; set; }
         public DbSet<EmployeeShiftAssignment> EmployeeShiftAssignments { get; set; }
 
         // ✅ NEW: Many-to-Many Relationship Table
@@ -331,6 +332,44 @@ namespace ZKAttendance.Infrastructure.Persistence
                 entity.Property(e => e.Status).HasConversion<int>();
                 entity.Property(e => e.CreatedDate).HasDefaultValueSql("GETDATE()");
             });
+
+            // A department may set a shift for everyone in it. SetNull, not
+            // cascade: deleting a shift must never delete a department.
+            modelBuilder.Entity<Department>()
+                        .HasOne(d => d.DefaultShift)
+                        .WithMany()
+                        .HasForeignKey(d => d.DefaultShiftId)
+                        .OnDelete(DeleteBehavior.SetNull);
+
+            // LocalServers Configuration
+            modelBuilder.Entity<LocalServer>(entity =>
+            {
+                entity.HasKey(e => e.LocalServerId);
+
+                entity.HasOne(e => e.Branch)
+                      .WithMany()
+                      .HasForeignKey(e => e.BranchId)
+                      .OnDelete(DeleteBehavior.Restrict);
+
+                // The agent key is the identity on the wire, so it must be
+                // unique across the whole system, not just within a branch.
+                entity.HasIndex(e => e.AgentKey)
+                      .IsUnique()
+                      .HasDatabaseName("UX_LocalServer_AgentKey");
+
+                entity.HasIndex(e => e.BranchId)
+                      .HasDatabaseName("IX_LocalServer_Branch");
+
+                entity.Property(e => e.CreatedDate).HasDefaultValueSql("GETDATE()");
+            });
+
+            // A device may be reached through an agent. Restrict, not cascade:
+            // deleting an agent must never delete the devices behind it.
+            modelBuilder.Entity<Device>()
+                        .HasOne(d => d.LocalServer)
+                        .WithMany(s => s.Devices)
+                        .HasForeignKey(d => d.LocalServerId)
+                        .OnDelete(DeleteBehavior.SetNull);
 
             // SystemSettings Configuration
             // ═════════════════════════════════════════════════════

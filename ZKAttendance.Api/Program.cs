@@ -166,6 +166,10 @@ builder.Services.AddScoped<IAttendancePolicyService, AttendancePolicyService>();
 builder.Services.AddScoped<IDailyAttendanceService, DailyAttendanceService>();
 builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 
+// Which hours apply to a person: their own shift, then their department's,
+// then the office hours in Settings.
+builder.Services.AddScoped<IShiftResolver, ShiftResolver>();
+
 // ═══════════════════════════════════════════════════════
 // Hangfire: scheduling only
 //
@@ -315,8 +319,19 @@ app.UseHttpsRedirection();
 
 app.UseCors(SpaCorsPolicy);
 
+// Catches "Invalid column name" / "Invalid object name" and answers with a
+// readable 503 naming the missing table or column, instead of a bare 500.
+app.UseMiddleware<ZKAttendance.Api.Infrastructure.SchemaDriftMiddleware>();
+
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Windows calls it "Nepal Standard Time"; Linux calls it "Asia/Kathmandu".
+// Falling back to server local time means the job still registers on a host
+// that has neither, rather than throwing at startup.
+var NepalTimeZone = new[] { "Nepal Standard Time", "Asia/Kathmandu" }
+    .Select(id => { try { return TimeZoneInfo.FindSystemTimeZoneById(id); } catch { return null; } })
+    .FirstOrDefault(tz => tz is not null) ?? TimeZoneInfo.Local;
 
 // Dashboard is Admin only. Hangfire allows everyone when no filter is given,
 // which would let any visitor trigger the attendance email job.
@@ -339,20 +354,8 @@ RecurringJob.AddOrUpdate<AttendanceDailyJob>(
     {
         // Windows uses "Nepal Standard Time"; Linux containers use
         // "Asia/Kathmandu". Falling back keeps this working on both.
-        TimeZone = ResolveNepalTimeZone()
+        TimeZone = NepalTimeZone
     });
-
-static TimeZoneInfo ResolveNepalTimeZone()
-{
-    foreach (var id in new[] { "Nepal Standard Time", "Asia/Kathmandu" })
-    {
-        try { return TimeZoneInfo.FindSystemTimeZoneById(id); }
-        catch (TimeZoneNotFoundException) { }
-        catch (InvalidTimeZoneException) { }
-    }
-    // Better a job that runs on server time than one that never registers.
-    return TimeZoneInfo.Local;
-}
 
 app.MapControllers();
 
@@ -360,5 +363,8 @@ app.MapControllers();
 // on the root at the Swagger UI (Development) so it is not just a bare 404.
 app.MapGet("/", () => Results.Redirect("/swagger"))
    .ExcludeFromDescription();
+
+await ZKAttendance.Api.Infrastructure.SchemaCheck.WarnIfBehindAsync(
+    app.Services, app.Logger);
 
 app.Run();

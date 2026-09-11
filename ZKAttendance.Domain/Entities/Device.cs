@@ -15,6 +15,14 @@ namespace ZKAttendance.Domain.Entities
         [Required]
         public int BranchId { get; set; }
 
+        /// <summary>
+        /// The local agent that reaches this device, when the central server
+        /// cannot. NULL means the current behaviour: the server polls the
+        /// device itself over the LAN. Nullable on purpose so nothing existing
+        /// changes.
+        /// </summary>
+        public int? LocalServerId { get; set; }
+
         [Required]
         [MaxLength(200)]
         public string DeviceName { get; set; } = string.Empty;
@@ -81,6 +89,7 @@ namespace ZKAttendance.Domain.Entities
         // Navigation Properties
         [ForeignKey("BranchId")]
         public virtual Branch? Branch { get; set; }
+        public virtual LocalServer? LocalServer { get; set; }
 
         public virtual ICollection<DeviceStatus> DeviceStatuses { get; set; } = new List<DeviceStatus>();
 

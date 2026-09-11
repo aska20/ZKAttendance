@@ -34,6 +34,7 @@ export default function Layout() {
             <NavItem to="/branches" label="Branches" />
             <NavItem to="/devices" label="Devices" />
             <NavItem to="/errors" label="Error Log" />
+            <NavItem to="/workshifts" label="Work Shifts" />
             <NavItem to="/settings" label="Settings" />
           </>
         ) : (

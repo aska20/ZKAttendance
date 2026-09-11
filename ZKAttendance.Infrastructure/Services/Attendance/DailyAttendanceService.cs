@@ -110,9 +110,23 @@ namespace ZKAttendance.Infrastructure.Services.Attendance
                 .OrderBy(x => x)
                 .ToList();
 
-            var approvals = await _db.AttendanceApprovals
-                .Where(a => a.AttendanceDate == day)
-                .ToDictionaryAsync(a => a.EmployeeId, a => a, ct);
+            // The approvals table may not exist yet on an older database. The
+            // daily report is still useful without it, so degrade rather than
+            // fail the whole report over a feature it only decorates.
+            Dictionary<int, AttendanceApproval> approvals;
+            try
+            {
+                approvals = await _db.AttendanceApprovals
+                    .Where(a => a.AttendanceDate == day)
+                    .ToDictionaryAsync(a => a.EmployeeId, a => a, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Could not read approvals for {Date}; continuing without them. Run Update-Database.",
+                    day.ToString("dd/MM/yyyy"));
+                approvals = new Dictionary<int, AttendanceApproval>();
+            }
 
             var report = new DailyAttendanceReport
             {
